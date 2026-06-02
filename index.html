@@ -1470,14 +1470,9 @@ function updatePartyMapView(countryName) {
     return;
   }
 
-  // For <4 players (scoring mode), start zoomed out and zoom in based on guesses
-  let startZoom = ZOOMS[0]; // Default: zoom 14 (landmark detail)
-  if (partyState.useScoring) {
-    // Start zoomed out (world view) for <4 players
-    startZoom = 2;
-  }
-
-  map.setView([coords.lat, coords.lng], startZoom, { animate: false });
+  // Always start at maximum zoom (landmark detail) like Daily/Unlimited mode
+  // Will zoom out based on wrong guesses via updatePartyMapZoom
+  map.setView([coords.lat, coords.lng], ZOOMS[0], { animate: false });
 
   // Ensure map size is correct after animation
   setTimeout(() => {
