@@ -1392,6 +1392,23 @@ function initializePartyMap() {
   }
 }
 
+function updatePartyMapZoom(guessCount) {
+  // Update map zoom based on guess count for <4 players (scoring mode)
+  if (!partyMapInstance || !partyState.useScoring) return;
+
+  const map = partyMapInstance;
+  // Get current view center
+  const center = map.getCenter();
+  // Use zoom based on guessCount progression like Daily mode
+  const targetZoom = Math.min(guessCount, ZOOMS.length - 1);
+  const zoomLevel = ZOOMS[targetZoom] || ZOOMS[ZOOMS.length - 1];
+
+  map.flyTo([center.lat, center.lng], zoomLevel, {
+    animate: true,
+    duration: 1.4
+  });
+}
+
 function updatePartyMapView(countryName) {
   if (!countryName) return;
 
@@ -1404,15 +1421,19 @@ function updatePartyMapView(countryName) {
     return;
   }
 
-  map.flyTo([coords.lat, coords.lng], ZOOMS[0], {
-    animate: true,
-    duration: 1.2
-  });
+  // For <4 players (scoring mode), start zoomed out and zoom in based on guesses
+  let startZoom = ZOOMS[0]; // Default: zoom 14 (landmark detail)
+  if (partyState.useScoring) {
+    // Start zoomed out (world view) for <4 players
+    startZoom = 2;
+  }
+
+  map.setView([coords.lat, coords.lng], startZoom, { animate: false });
 
   // Ensure map size is correct after animation
   setTimeout(() => {
     if (map) map.invalidateSize(false);
-  }, 1200);
+  }, 100);
 }
 
 function listenToQuestion() {
@@ -1665,6 +1686,31 @@ function listenToResults() {
     const eliminated = roomData.eliminated || [];
     const currentQ = roomData.currentQuestion || {};
 
+    // Show map shade when results appear
+    const mapShade = document.getElementById('map-shade');
+    if (mapShade) {
+      mapShade.classList.remove('up');
+      mapShade.classList.add('down');
+    }
+
+    // For <4 players (scoring mode), update zoom based on highest guess count
+    if (partyState.useScoring) {
+      let maxGuessCount = 0;
+      Object.values(players).forEach(player => {
+        const guesses = player.guessCount || 0;
+        if (guesses > maxGuessCount) maxGuessCount = guesses;
+      });
+      // Zoom in based on guess count (1.4s animation + 0.5s buffer = 1.9s before hiding shade)
+      updatePartyMapZoom(maxGuessCount);
+      // Hide shade after zoom animation completes + 0.5s buffer
+      setTimeout(() => {
+        if (mapShade) {
+          mapShade.classList.remove('down');
+          mapShade.classList.add('up');
+        }
+      }, 1900);
+    }
+
     const content = document.getElementById('party-result-content');
     let html = `<div style="text-align: center; margin-bottom: 20px;">
       <div style="font-size: 0.9rem; color: #64748b; margin-bottom: 12px;">Answer: <strong style="color: #22d3ee;">${currentQ.country || '?'}</strong></div>`;
@@ -1713,7 +1759,18 @@ function listenToResults() {
           startNextRound();
         } else {
           // All questions done - determine winner by score
-          showWinner(players);
+          // Find player with highest score
+          let winnerData = null;
+          let highestScore = -1;
+          Object.entries(players).forEach(([id, player]) => {
+            const score = player.score || 0;
+            if (score > highestScore) {
+              highestScore = score;
+              winnerData = player;
+            }
+          });
+          if (winnerData) showWinner(winnerData);
+          else showWinner(players);
         }
       } else {
         // ELIMINATION MODE - check elimination status
