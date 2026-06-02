@@ -1092,6 +1092,7 @@ let partyState = {
   timerInterval: null,
   timeRemaining: 60,
   currentAttempt: 1, // Track which attempt/zoom level (1st, 2nd, 3rd, etc)
+  lastAnsweredPlayers: {}, // Track who answered to detect new answers
 };
 
 function generateRoomCode() {
@@ -1528,6 +1529,7 @@ function listenToQuestion() {
   document.getElementById('party-hint').style.display = 'none'; // Clear hint
   partyState.roundEnding = false;
   partyState.currentAttempt = 1; // Reset attempt counter for new question
+  partyState.lastAnsweredPlayers = {}; // Reset answered tracking for ding sound
 
   // Fetch useScoring flag from Firebase (for players to know if they're in scoring mode)
   partyState.roomRef.once('value', snapshot => {
@@ -1643,10 +1645,44 @@ function updateScoreDisplay() {
   });
 }
 
+function playDingSound() {
+  // Play a notification ding when someone answers
+  try {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const now = audioContext.currentTime;
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
+
+    // High pitch ding sound
+    oscillator.frequency.setValueAtTime(800, now);
+    oscillator.frequency.exponentialRampToValueAtTime(600, now + 0.2);
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+
+    oscillator.start(now);
+    oscillator.stop(now + 0.2);
+  } catch (e) {
+    console.warn('Could not play ding sound:', e);
+  }
+}
+
 function ensureInputEnabled(players) {
   // Make sure input is enabled if no one has answered yet (handles sync issues)
   const playerList = Object.values(players) || [];
   const anyAnswered = playerList.some(p => p.answered);
+
+  // Check if someone just answered (opponent's answer)
+  Object.entries(players).forEach(([id, player]) => {
+    const wasAnswered = partyState.lastAnsweredPlayers[id];
+    if (player.answered && !wasAnswered && id !== partyState.playerId) {
+      // Someone else just answered - play ding
+      playDingSound();
+    }
+    partyState.lastAnsweredPlayers[id] = player.answered || false;
+  });
 
   if (!anyAnswered) {
     const inputEl = document.getElementById('party-answer-input');
@@ -1716,6 +1752,9 @@ function checkRoundComplete(players) {
           }
           if (submitBtn) submitBtn.disabled = false;
           if (statusEl) statusEl.style.display = 'none';
+
+          // Reset answered tracking for next attempt
+          partyState.lastAnsweredPlayers = {};
         } catch (e) {
           console.warn('Error resetting UI:', e);
         }
