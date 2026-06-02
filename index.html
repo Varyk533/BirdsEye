@@ -1640,6 +1640,10 @@ function checkRoundComplete(players) {
         const zoomIndex = Math.min(partyState.currentAttempt - 1, ZOOMS.length - 1);
         updatePartyMapZoom(zoomIndex);
 
+        // Add 10 seconds to timer for another attempt
+        partyState.timeRemaining += 10;
+        updateTimerDisplay();
+
         // Reset all players for another attempt at same question
         const updates = {};
         Object.keys(players).forEach(id => {
