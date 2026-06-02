@@ -1,0 +1,1970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TopDown</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-compat.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f172a; color: #e2e8f0;
+      min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+      padding-bottom: 40px;
+    }
+    header { padding: 20px 16px 12px; text-align: center; }
+    .logo { display: flex; align-items: center; justify-content: center; gap: 12px; }
+    .logo svg { width: 44px; height: 44px; }
+    .logo h1 {
+      font-size: 2.6rem; font-weight: 900; letter-spacing: 2px;
+      font-family: 'Orbitron', sans-serif;
+      color: #f1f5f9; line-height: 1; text-transform: uppercase;
+    }
+    .logo h1 span { color: #22d3ee; }
+    .subtitle { color: #64748b; font-size: 0.82rem; margin-top: 6px; }
+
+    .mode-toggle { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
+    .mode-btn {
+      padding: 6px 16px; border: 1px solid #334155;
+      background: transparent; color: #64748b;
+      border-radius: 8px; font-size: 0.8rem; font-weight: 600;
+      cursor: pointer; transition: all 0.2s; letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+    .mode-btn:hover { border-color: #475569; color: #94a3b8; }
+    .mode-btn.active { background: #22d3ee; border-color: #22d3ee; color: #0f172a; }
+
+    #map-wrap {
+      width: 100%; max-width: 580px; padding: 0 12px;
+      position: relative;
+    }
+    #map-border {
+      border-radius: 14px; overflow: hidden;
+      border: 2px solid #1e293b;
+      width: 100%;
+      padding-bottom: 100%;
+      position: relative;
+      box-shadow: 0 0 40px rgba(59,130,246,0.08);
+    }
+    #map {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      width: 100%; height: 100%;
+    }
+    #view-badge {
+      position: absolute; top: 10px; right: 10px; z-index: 1000;
+      background: rgba(15,23,42,0.85); color: #94a3b8;
+      padding: 5px 10px; border-radius: 8px; font-size: 0.72rem;
+      font-weight: 600; letter-spacing: 0.5px; backdrop-filter: blur(4px);
+      border: 1px solid #1e293b;
+    }
+    #map-shade {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 100%;
+      background: #0f172a;
+      z-index: 2000;
+      transform: translateY(-100%);
+      transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 8px;
+    }
+    #map-shade.down  { transform: translateY(0); }
+    #map-shade.up    { transform: translateY(-100%); }
+    #map-shade .shade-logo {
+      display: flex; align-items: center; gap: 10px;
+    }
+    #map-shade .shade-logo svg { width: 32px; height: 32px; }
+    #map-shade .shade-logo span {
+      font-size: 1.8rem; font-weight: 900;
+      font-family: 'Orbitron', sans-serif;
+      color: #f1f5f9; letter-spacing: 1px; text-transform: uppercase;
+    }
+    #map-shade .shade-logo span em { color: #22d3ee; font-style: normal; }
+    #map-shade .shade-sub {
+      font-size: 0.72rem; color: #475569; letter-spacing: 0.5px;
+    }
+
+    #zoom-bar-wrap {
+      position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+      z-index: 1000; display: flex; gap: 5px;
+    }
+    .zoom-pip {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: rgba(255,255,255,0.2); transition: background 0.3s;
+    }
+    .zoom-pip.active { background: #3b82f6; }
+    .zoom-pip.used { background: rgba(255,255,255,0.4); }
+
+    #game-area { width: 100%; max-width: 580px; padding: 14px 12px 0; }
+    #input-row { display: flex; gap: 8px; margin-bottom: 14px; }
+    #country-input {
+      flex: 1; padding: 13px 16px;
+      background: #1e293b; border: 2px solid #334155;
+      border-radius: 10px; color: #e2e8f0; font-size: 0.97rem;
+      outline: none; transition: border-color 0.2s;
+    }
+    #country-input:focus { border-color: #22d3ee; }
+    #country-input::placeholder { color: #475569; }
+    #country-input:disabled { opacity: 0.45; cursor: not-allowed; }
+    #guess-btn {
+      padding: 13px 22px; background: #22d3ee;
+      border: none; border-radius: 10px; color: #0f172a;
+      font-size: 0.97rem; font-weight: 700; cursor: pointer;
+      transition: background 0.15s, transform 0.1s; white-space: nowrap;
+    }
+    #guess-btn:hover:not(:disabled) { background: #67e8f9; }
+    #guess-btn:active:not(:disabled) { transform: scale(0.97); }
+    #guess-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    #dots-row { display: flex; gap: 7px; margin-bottom: 14px; }
+    .g-dot {
+      flex: 1; height: 30px; border-radius: 7px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.3px;
+      transition: background 0.3s, transform 0.15s;
+    }
+    .g-dot.unused { background: #1e293b; color: #475569; }
+    .g-dot.wrong { background: #7f1d1d; color: #fca5a5; }
+    .g-dot.correct { background: #14532d; color: #86efac; }
+    .g-dot.wrong.new, .g-dot.correct.new { animation: pop 0.25s ease; }
+    @keyframes pop { 0%{transform:scale(1)} 50%{transform:scale(1.15)} 100%{transform:scale(1)} }
+
+    #feedback {
+      margin-top: 10px; padding: 11px 14px;
+      border-radius: 9px; font-weight: 500; font-size: 0.88rem;
+      display: none; line-height: 1.4;
+    }
+    .fb-wrong   { background: #450a0a; border: 1px solid #991b1b; color: #fca5a5; }
+    .fb-correct { background: #052e16; border: 1px solid #15803d; color: #86efac; }
+    .fb-end     { background: #1c1917; border: 1px solid #57534e; color: #d6d3d1; }
+
+    #history { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+    .h-item {
+      padding: 9px 13px; border-radius: 8px;
+      display: flex; align-items: center; gap: 10px;
+      font-size: 0.84rem; background: #1e293b;
+      animation: slideIn 0.2s ease;
+    }
+    @keyframes slideIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:none} }
+    .h-item.wrong  { border-left: 3px solid #dc2626; }
+    .h-item.correct { border-left: 3px solid #22c55e; }
+    .h-icon { font-size: 1rem; width: 20px; text-align: center; }
+    .h-country { flex: 1; }
+    .h-label { font-size: 0.72rem; color: #64748b; margin-left: auto; }
+
+    #share-btn {
+      display: none; margin-top: 14px; width: 100%;
+      padding: 13px; background: #15803d; border: none;
+      border-radius: 10px; color: white; font-size: 0.97rem;
+      font-weight: 700; cursor: pointer; transition: background 0.15s;
+      letter-spacing: 0.3px;
+    }
+    #share-btn:hover { background: #166534; }
+
+    #again-btn {
+      display: none; margin-top: 8px; width: 100%;
+      padding: 11px 22px; background: #1e293b; border: 2px solid #334155;
+      border-radius: 10px; color: #e2e8f0; cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      align-items: center; justify-content: center; gap: 10px;
+    }
+    #again-btn:hover { background: #263348; border-color: #22d3ee; }
+    #again-btn svg { width: 28px; height: 28px; flex-shrink: 0; }
+    #again-btn .btn-wordmark {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.4rem; font-weight: 900; letter-spacing: 1px;
+      line-height: 1; color: #f1f5f9; text-transform: uppercase;
+    }
+    #again-btn .btn-wordmark em { color: #22d3ee; font-style: normal; }
+    #again-btn .btn-sub {
+      font-size: 0.7rem; color: #64748b; letter-spacing: 1px;
+      text-transform: uppercase; line-height: 1; margin-top: 2px;
+    }
+
+    #hint-box {
+      display: none; margin-top: 8px; padding: 9px 13px;
+      background: #0f1f35; border: 1px solid #1e3a5f;
+      border-radius: 9px; font-size: 0.82rem; color: #7dd3fc;
+      animation: slideIn 0.3s ease;
+      line-height: 1.4;
+    }
+    #hint-box .hint-label {
+      font-size: 0.67rem; text-transform: uppercase; letter-spacing: 1px;
+      color: #334155; margin-bottom: 3px;
+    }
+
+    #how-to {
+      max-width: 580px; padding: 20px 16px 0;
+      color: #475569; font-size: 0.78rem; text-align: center; line-height: 1.7;
+    }
+    #how-to span { color: #64748b; }
+
+    /* Party Mode Styles */
+    #party-container {
+      width: 100%; display: flex; justify-content: center; align-items: center; min-height: 60vh;
+    }
+    .party-screen {
+      display: none; width: 100%; max-width: 420px; padding: 0 12px;
+    }
+    .party-screen.active { display: block; }
+    .party-box {
+      background: #1a2744; border: 1px solid #2d4a7a; border-radius: 14px;
+      padding: 28px 20px; backdrop-filter: blur(10px);
+    }
+    .party-box h2 {
+      font-family: 'Orbitron', sans-serif; font-size: 1.8rem; letter-spacing: 1px;
+      color: #f1f5f9; margin-bottom: 20px; text-transform: uppercase;
+    }
+    .party-input {
+      width: 100%; padding: 12px 14px; margin-bottom: 12px;
+      background: #0f1f35; border: 1px solid #334155; border-radius: 8px;
+      color: #e2e8f0; font-size: 0.95rem; outline: none;
+      transition: border-color 0.2s;
+    }
+    .party-input:focus { border-color: #22d3ee; }
+    .party-btn {
+      width: 100%; padding: 12px; margin-bottom: 10px;
+      background: #22d3ee; border: none; border-radius: 8px;
+      color: #0f172a; font-weight: 700; font-size: 0.95rem;
+      cursor: pointer; transition: background 0.15s; letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .party-btn:hover { background: #67e8f9; }
+    .party-btn.secondary {
+      background: #1e293b; border: 1px solid #334155; color: #e2e8f0;
+      margin-bottom: 0;
+    }
+    .party-btn.secondary:hover { background: #263348; }
+    #party-players-list {
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .party-player {
+      padding: 10px 14px; background: #0f1f35; border-radius: 8px;
+      border-left: 3px solid #22d3ee; color: #cbd5e1; font-size: 0.88rem;
+    }
+    .party-player.host::after {
+      content: " (Host)"; color: #22d3ee; font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="26" cy="26" r="24" stroke="#22d3ee" stroke-width="1.5" fill="none"/>
+      <circle cx="26" cy="26" r="16" stroke="#22d3ee" stroke-width="1" fill="none" opacity="0.6"/>
+      <circle cx="26" cy="26" r="8" stroke="#22d3ee" stroke-width="1" fill="none" opacity="0.3"/>
+      <line x1="26" y1="2" x2="26" y2="10" stroke="#22d3ee" stroke-width="2"/>
+      <line x1="26" y1="42" x2="26" y2="50" stroke="#22d3ee" stroke-width="2"/>
+      <line x1="2" y1="26" x2="10" y2="26" stroke="#22d3ee" stroke-width="2"/>
+      <line x1="42" y1="26" x2="50" y2="26" stroke="#22d3ee" stroke-width="2"/>
+      <circle cx="26" cy="26" r="3" fill="#22d3ee"/>
+    </svg>
+    <h1>TOP<span>DOWN</span></h1>
+  </div>
+  <p class="subtitle">Identify the country from above &nbsp;·&nbsp; 6 guesses</p>
+  <div class="mode-toggle">
+    <button class="mode-btn active" data-mode="daily">Daily</button>
+    <button class="mode-btn" data-mode="unlimited">Unlimited</button>
+    <button class="mode-btn" data-mode="party">Party</button>
+  </div>
+</header>
+
+<!-- Party Mode Screens -->
+<div id="party-container" style="display: none;">
+  <!-- Create Room Screen -->
+  <div id="party-create" class="party-screen">
+    <div class="party-box">
+      <h2>Create Party</h2>
+      <input id="party-host-name" type="text" placeholder="Enter your name" maxlength="15" class="party-input">
+      <button id="party-create-btn" class="party-btn">Create Room</button>
+      <p style="text-align: center; margin-top: 16px; font-size: 0.85rem; color: #64748b;">
+        Already have a code? <button id="party-switch-join" style="background: none; border: none; color: #22d3ee; cursor: pointer; text-decoration: underline; font-size: 0.85rem;">Join instead</button>
+      </p>
+      <p id="party-code-display" style="display: none; margin-top: 20px; text-align: center;">
+        <span style="font-size: 0.85rem; color: #64748b;">Share this code:</span><br>
+        <span id="party-code" style="font-size: 2.2rem; font-weight: 900; font-family: 'Orbitron'; letter-spacing: 2px; color: #22d3ee; margin-top: 8px;"></span>
+      </p>
+      <button id="party-waiting-btn" class="party-btn secondary" style="display: none; margin-top: 20px;">Waiting for players...</button>
+    </div>
+  </div>
+
+  <!-- Join Room Screen -->
+  <div id="party-join" class="party-screen">
+    <div class="party-box">
+      <h2>Join Party</h2>
+      <input id="party-player-name" type="text" placeholder="Enter your name" maxlength="15" class="party-input">
+      <input id="party-join-code" type="text" placeholder="Enter room code" maxlength="4" class="party-input" style="text-transform: uppercase;">
+      <button id="party-join-btn" class="party-btn">Join Room</button>
+      <p style="text-align: center; margin-top: 16px; font-size: 0.85rem; color: #64748b;">
+        Don't have a code? <button id="party-switch-create" style="background: none; border: none; color: #22d3ee; cursor: pointer; text-decoration: underline; font-size: 0.85rem;">Create instead</button>
+      </p>
+    </div>
+  </div>
+
+  <!-- Lobby Screen -->
+  <div id="party-lobby" class="party-screen">
+    <div class="party-box">
+      <h2 id="party-lobby-title">Waiting for players...</h2>
+      <p id="party-lobby-code" style="display: none; margin-bottom: 20px; text-align: center;">
+        <span style="font-size: 0.85rem; color: #64748b;">Share this code:</span><br>
+        <span id="party-lobby-code-text" style="font-size: 2.2rem; font-weight: 900; font-family: 'Orbitron'; letter-spacing: 2px; color: #22d3ee; margin-top: 8px;"></span>
+      </p>
+      <div id="party-players-list" style="margin: 20px 0; min-height: 100px;"></div>
+      <button id="party-start-btn" class="party-btn" style="display: none;">Start Game</button>
+      <button id="party-leave-btn" class="party-btn secondary">Leave</button>
+    </div>
+  </div>
+
+  <!-- Question Screen -->
+  <div id="party-question" class="party-screen">
+    <div class="party-box" style="max-width: 500px;">
+      <!-- Timer and Score Display -->
+      <div id="party-timer-score" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #334155; display: none;">
+        <div style="text-align: left;">
+          <div style="font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 1px;">Time Left</div>
+          <div id="party-timer" style="font-size: 1.8rem; font-weight: 900; color: #22d3ee; font-family: 'Orbitron';">60s</div>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 1px;">Score</div>
+          <div id="party-scores-display" style="font-size: 1rem; color: #f1f5f9; font-weight: 700;"></div>
+        </div>
+      </div>
+
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">Question <span id="party-q-number">1</span> of 6</div>
+        <div id="party-guess-count" style="font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; display: none;"></div>
+        <h2 style="font-size: 1.4rem; color: #f1f5f9;">What is this country?</h2>
+        <div id="party-map-preview" style="width: 100%; height: 200px; background: #0f1f35; border-radius: 8px; border: 1px solid #334155; margin-top: 12px; display: flex; align-items: center; justify-content: center; color: #64748b; font-size: 0.9rem;">Map preview coming soon</div>
+      </div>
+      <input id="party-answer-input" type="text" placeholder="Enter country name..." maxlength="50" class="party-input" list="countries-list" autocomplete="off">
+      <button id="party-submit-answer-btn" class="party-btn">Submit Answer</button>
+      <div id="party-answer-status" style="text-align: center; margin-top: 12px; font-size: 0.85rem; color: #22d3ee; display: none;">✓ Answer submitted</div>
+    </div>
+  </div>
+
+  <!-- Result Screen -->
+  <div id="party-result" class="party-screen">
+    <div class="party-box" style="max-width: 500px;">
+      <h2 style="text-align: center; margin-bottom: 20px;">Round Results</h2>
+      <div id="party-result-content" style="min-height: 150px;">
+        <div style="text-align: center; color: #64748b;">Loading results...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="map-wrap">
+  <div id="map-border">
+    <div id="map"></div>
+    <div id="map-shade">
+      <div class="shade-logo">
+        <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="26" cy="26" r="24" stroke="#22d3ee" stroke-width="1.5" fill="none"/>
+          <circle cx="26" cy="26" r="16" stroke="#22d3ee" stroke-width="1" fill="none" opacity="0.6"/>
+          <circle cx="26" cy="26" r="8" stroke="#22d3ee" stroke-width="1" fill="none" opacity="0.3"/>
+          <line x1="26" y1="2" x2="26" y2="10" stroke="#22d3ee" stroke-width="2"/>
+          <line x1="26" y1="42" x2="26" y2="50" stroke="#22d3ee" stroke-width="2"/>
+          <line x1="2" y1="26" x2="10" y2="26" stroke="#22d3ee" stroke-width="2"/>
+          <line x1="42" y1="26" x2="50" y2="26" stroke="#22d3ee" stroke-width="2"/>
+          <circle cx="26" cy="26" r="3" fill="#22d3ee"/>
+        </svg>
+        <span>TOP<em>DOWN</em></span>
+      </div>
+      <div class="shade-sub">Loading next location…</div>
+    </div>
+    <div id="view-badge">VIEW 1 / 6</div>
+    <div id="zoom-bar-wrap">
+      <div class="zoom-pip active" id="pip-0"></div>
+      <div class="zoom-pip" id="pip-1"></div>
+      <div class="zoom-pip" id="pip-2"></div>
+      <div class="zoom-pip" id="pip-3"></div>
+      <div class="zoom-pip" id="pip-4"></div>
+      <div class="zoom-pip" id="pip-5"></div>
+    </div>
+  </div>
+</div>
+
+<div id="game-area">
+  <div id="dots-row"></div>
+  <div id="input-row">
+    <input id="country-input" type="text" list="countries-list" placeholder="Type a country…" autocomplete="off" spellcheck="false"/>
+    <datalist id="countries-list"></datalist>
+    <button id="guess-btn">Guess</button>
+  </div>
+  <div id="feedback"></div>
+  <div id="hint-box"><div class="hint-label">💡 Clue</div><span id="hint-text"></span></div>
+  <div id="history"></div>
+  <button id="share-btn">📋 Share Result</button>
+  <button id="again-btn">
+    <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="26" cy="26" r="24" stroke="#22d3ee" stroke-width="1.5" fill="none"/>
+      <circle cx="26" cy="26" r="16" stroke="#22d3ee" stroke-width="1" fill="none" opacity="0.6"/>
+      <circle cx="26" cy="26" r="8" stroke="#22d3ee" stroke-width="1" fill="none" opacity="0.3"/>
+      <line x1="26" y1="2" x2="26" y2="10" stroke="#22d3ee" stroke-width="2"/>
+      <line x1="26" y1="42" x2="26" y2="50" stroke="#22d3ee" stroke-width="2"/>
+      <line x1="2" y1="26" x2="10" y2="26" stroke="#22d3ee" stroke-width="2"/>
+      <line x1="42" y1="26" x2="50" y2="26" stroke="#22d3ee" stroke-width="2"/>
+      <circle cx="26" cy="26" r="3" fill="#22d3ee"/>
+    </svg>
+    <div>
+      <div class="btn-wordmark">TOP<em>DOWN</em></div>
+      <div class="btn-sub">Play Again</div>
+    </div>
+  </button>
+</div>
+
+<div id="how-to">
+  Zooming out with each wrong guess. Name the country in <span>6 guesses</span> or fewer.
+</div>
+
+<script>
+const ANSWERS = [
+  // Australia
+  { name:"Australia", lat:-25.3444, lng:131.0369 }, // Uluru
+  { name:"Australia", lat:-33.8568, lng:151.2153 }, // Sydney Opera House
+  { name:"Australia", lat:-16.9203, lng:145.7710 }, // Great Barrier Reef
+  { name:"Australia", lat:-27.4698, lng:153.0251 }, // Brisbane
+  // Brazil
+  { name:"Brazil", lat:-22.9519, lng:-43.2105 }, // Rio
+  { name:"Brazil", lat:-3.7172,  lng:-38.5430 }, // Fortaleza coast
+  { name:"Brazil", lat:-15.7942, lng:-47.8822 }, // Brasilia
+  { name:"Brazil", lat:-3.1190,  lng:-60.0217 }, // Amazon
+  // Egypt
+  { name:"Egypt", lat:29.9792, lng:31.1342 }, // Pyramids
+  { name:"Egypt", lat:25.6872, lng:32.6396 }, // Luxor
+  { name:"Egypt", lat:27.2579, lng:33.8116 }, // Red Sea coast
+  // France
+  { name:"France", lat:48.8584, lng:2.2945  }, // Eiffel Tower
+  { name:"France", lat:43.7102, lng:7.2620  }, // Monaco/Nice coast
+  { name:"France", lat:44.0165, lng:6.2358  }, // Alps
+  { name:"France", lat:47.3220, lng:5.0415  }, // Burgundy vineyards
+  // China
+  { name:"China", lat:40.4319, lng:116.5704 }, // Great Wall
+  { name:"China", lat:29.6565, lng:91.1408  }, // Lhasa Tibet
+  { name:"China", lat:22.3193, lng:114.1694 }, // Hong Kong
+  { name:"China", lat:30.2741, lng:120.1551 }, // Hangzhou
+  // United States
+  { name:"United States", lat:36.1069, lng:-112.1129 }, // Grand Canyon
+  { name:"United States", lat:40.6892, lng:-74.0445  }, // Statue of Liberty
+  { name:"United States", lat:27.9506, lng:-82.4572  }, // Tampa bay
+  { name:"United States", lat:44.4280, lng:-110.5885 }, // Yellowstone
+  { name:"United States", lat:25.7617, lng:-80.1918  }, // Miami
+  // Japan
+  { name:"Japan", lat:35.3606, lng:138.7274 }, // Fuji
+  { name:"Japan", lat:34.9949, lng:135.7851 }, // Kyoto temples
+  { name:"Japan", lat:34.3853, lng:132.4553 }, // Hiroshima
+  // India
+  { name:"India", lat:27.1751, lng:78.0421  }, // Taj Mahal
+  { name:"India", lat:8.0883,  lng:77.5385  }, // Kerala coast
+  { name:"India", lat:20.9517, lng:85.0985  }, // Odisha temples
+  { name:"India", lat:12.9716, lng:77.5946  }, // Bangalore
+  // Italy
+  { name:"Italy", lat:41.9022,  lng:12.4539  }, // Rome
+  { name:"Italy", lat:45.4408,  lng:12.3155  }, // Venice
+  { name:"Italy", lat:40.8518,  lng:14.2681  }, // Naples/Vesuvius
+  { name:"Italy", lat:37.5079,  lng:15.0830  }, // Sicily/Etna
+  // Greece
+  { name:"Greece", lat:37.9715, lng:23.7267 }, // Athens
+  { name:"Greece", lat:36.4618, lng:25.3753 }, // Santorini
+  { name:"Greece", lat:39.0742, lng:21.8243 }, // Meteora monasteries
+  // Spain
+  { name:"Spain", lat:40.4168,  lng:-3.7038 }, // Madrid
+  { name:"Spain", lat:41.3851,  lng:2.1734  }, // Barcelona
+  { name:"Spain", lat:28.2916,  lng:-16.6291}, // Tenerife
+  { name:"Spain", lat:37.1773,  lng:-3.5986 }, // Granada/Alhambra
+  // Germany
+  { name:"Germany", lat:52.5200, lng:13.4050 }, // Berlin
+  { name:"Germany", lat:47.5576, lng:10.7498 }, // Bavarian Alps
+  { name:"Germany", lat:48.1351, lng:11.5820 }, // Munich
+  // United Kingdom
+  { name:"United Kingdom", lat:51.5074, lng:-0.1278  }, // London
+  { name:"United Kingdom", lat:51.1789, lng:-1.8262  }, // Stonehenge
+  { name:"United Kingdom", lat:57.1497, lng:-2.0943  }, // Aberdeen Scotland
+  { name:"United Kingdom", lat:54.9783, lng:-1.6178  }, // Newcastle
+  // Canada
+  { name:"Canada", lat:53.5461,  lng:-113.4938 }, // Edmonton
+  { name:"Canada", lat:43.6532,  lng:-79.3832  }, // Toronto
+  { name:"Canada", lat:45.5017,  lng:-73.5673  }, // Montreal
+  { name:"Canada", lat:49.2827,  lng:-123.1207 }, // Vancouver
+  // Mexico
+  { name:"Mexico", lat:19.4326,  lng:-99.1332  }, // Mexico City
+  { name:"Mexico", lat:20.6296,  lng:-87.0739  }, // Tulum
+  { name:"Mexico", lat:29.1026,  lng:-110.9770 }, // Sonora desert
+  // Argentina
+  { name:"Argentina", lat:-34.6037, lng:-58.3816 }, // Buenos Aires
+  { name:"Argentina", lat:-50.9423, lng:-73.4068 }, // Patagonia/Torres del Paine
+  { name:"Argentina", lat:-24.1858, lng:-65.2995 }, // Salta salt flats
+  // South Africa
+  { name:"South Africa", lat:-33.9249, lng:18.4241 }, // Cape Town
+  { name:"South Africa", lat:-25.7487, lng:28.2411 }, // Pretoria
+  { name:"South Africa", lat:-24.0000, lng:31.5000 }, // Kruger park
+  // Nigeria
+  { name:"Nigeria", lat:9.0765,  lng:7.3986  }, // Abuja
+  { name:"Nigeria", lat:6.5244,  lng:3.3792  }, // Lagos
+  // Kenya
+  { name:"Kenya", lat:-1.2921,  lng:36.8219  }, // Nairobi
+  { name:"Kenya", lat:-2.6527,  lng:37.2606  }, // Amboseli/Kilimanjaro view
+  { name:"Kenya", lat:-0.3031,  lng:36.0800  }, // Rift Valley
+  // Morocco
+  { name:"Morocco", lat:31.6295, lng:-7.9811  }, // Marrakech
+  { name:"Morocco", lat:35.1688, lng:-5.2699  }, // Tangier
+  { name:"Morocco", lat:31.5085, lng:-4.0000  }, // Sahara dunes
+  // Saudi Arabia
+  { name:"Saudi Arabia", lat:24.6877, lng:46.7219 }, // Riyadh
+  { name:"Saudi Arabia", lat:21.3891, lng:39.8579 }, // Mecca
+  { name:"Saudi Arabia", lat:26.9239, lng:49.9026 }, // Dammam coast
+  // Iran
+  { name:"Iran", lat:35.6892,  lng:51.3890  }, // Tehran
+  { name:"Iran", lat:29.6100,  lng:52.5316  }, // Persepolis
+  { name:"Iran", lat:32.6539,  lng:51.6660  }, // Isfahan
+  // Turkey
+  { name:"Turkey", lat:39.9334,  lng:32.8597  }, // Ankara
+  { name:"Turkey", lat:38.6748,  lng:26.4118  }, // Cappadocia
+  { name:"Turkey", lat:41.0082,  lng:28.9784  }, // Istanbul
+  // Indonesia
+  { name:"Indonesia", lat:-8.4095,  lng:115.1889 }, // Bali
+  { name:"Indonesia", lat:-7.7956,  lng:110.3695 }, // Borobudur
+  { name:"Indonesia", lat:3.5952,   lng:98.6722  }, // Medan Sumatra
+  // Thailand
+  { name:"Thailand", lat:13.7563,  lng:100.5018 }, // Bangkok
+  { name:"Thailand", lat:18.7883,  lng:98.9853  }, // Chiang Mai
+  { name:"Thailand", lat:7.8804,   lng:98.2958  }, // Phuket
+  // Vietnam
+  { name:"Vietnam", lat:21.0285,  lng:105.8542 }, // Hanoi
+  { name:"Vietnam", lat:20.9101,  lng:107.1839 }, // Ha Long Bay
+  { name:"Vietnam", lat:10.8231,  lng:106.6297 }, // Ho Chi Minh City
+  // Philippines
+  { name:"Philippines", lat:14.5995, lng:120.9842 }, // Manila
+  { name:"Philippines", lat:9.7022,  lng:118.7322 }, // Palawan
+  { name:"Philippines", lat:10.3157, lng:123.8854 }, // Cebu
+  // South Korea
+  { name:"South Korea", lat:37.5665, lng:126.9780 }, // Seoul
+  { name:"South Korea", lat:33.3617, lng:126.5292 }, // Jeju Island
+  // New Zealand
+  { name:"New Zealand", lat:-43.5321, lng:172.6362 }, // Christchurch
+  { name:"New Zealand", lat:-36.8509, lng:174.7645 }, // Auckland
+  { name:"New Zealand", lat:-45.0312, lng:168.6626 }, // Queenstown fjords
+  // Peru
+  { name:"Peru", lat:-13.1631, lng:-72.5450 }, // Machu Picchu
+  { name:"Peru", lat:-15.8402, lng:-70.0219 }, // Lake Titicaca
+  { name:"Peru", lat:-12.0464, lng:-77.0428 }, // Lima
+  // Colombia
+  { name:"Colombia", lat:4.7110,  lng:-74.0721 }, // Bogota
+  { name:"Colombia", lat:6.2442,  lng:-75.5812 }, // Medellin
+  { name:"Colombia", lat:10.3910, lng:-75.4794 }, // Cartagena
+  // Chile
+  { name:"Chile", lat:-33.4489, lng:-70.6693 }, // Santiago
+  { name:"Chile", lat:-22.9087, lng:-68.2000 }, // Atacama desert
+  { name:"Chile", lat:-53.1638, lng:-70.9171 }, // Patagonia
+  // Iceland
+  { name:"Iceland", lat:64.9631,  lng:-19.0208 }, // Central highlands
+  { name:"Iceland", lat:63.5264,  lng:-19.5053 }, // Eyjafjallajokull
+  { name:"Iceland", lat:64.1265,  lng:-21.8174 }, // Reykjavik
+  // Jordan
+  { name:"Jordan", lat:30.3285,  lng:35.4444  }, // Petra
+  { name:"Jordan", lat:29.5320,  lng:35.0060  }, // Wadi Rum desert
+  // Malaysia
+  { name:"Malaysia", lat:3.1390,  lng:101.6869 }, // KL
+  { name:"Malaysia", lat:5.9788,  lng:116.0735 }, // Borneo/Kota Kinabalu
+  // Cambodia
+  { name:"Cambodia", lat:13.4125, lng:103.8670 }, // Angkor Wat
+  { name:"Cambodia", lat:11.5564, lng:104.9282 }, // Phnom Penh
+  // Nepal
+  { name:"Nepal", lat:27.7172,  lng:85.3240  }, // Kathmandu
+  { name:"Nepal", lat:27.9881,  lng:86.9250  }, // Everest base
+  // Sri Lanka
+  { name:"Sri Lanka", lat:7.8731, lng:80.7718 }, // Central highlands
+  { name:"Sri Lanka", lat:6.0535, lng:80.2210 }, // Southern coast
+  // Tanzania
+  { name:"Tanzania", lat:-6.3690, lng:34.8888 }, // Central savanna
+  { name:"Tanzania", lat:-3.3869, lng:36.6958 }, // Serengeti/Kilimanjaro
+  { name:"Tanzania", lat:-6.1659, lng:39.2026 }, // Zanzibar
+  // Iceland locations already covered above
+  // Switzerland
+  { name:"Switzerland", lat:46.9481, lng:7.4474  }, // Bern
+  { name:"Switzerland", lat:45.9237, lng:7.5510  }, // Matterhorn
+  { name:"Switzerland", lat:46.2044, lng:6.1432  }, // Geneva lake
+  // Norway
+  { name:"Norway", lat:59.9139, lng:10.7522 }, // Oslo
+  { name:"Norway", lat:60.4720, lng:6.8355  }, // Hardanger fjord
+  { name:"Norway", lat:69.6489, lng:18.9551 }, // Tromso Arctic
+  // Sweden
+  { name:"Sweden", lat:59.3293, lng:18.0686 }, // Stockholm
+  { name:"Sweden", lat:67.8558, lng:20.2253 }, // Abisko Arctic
+  // Finland
+  { name:"Finland", lat:60.1699, lng:24.9384 }, // Helsinki
+  { name:"Finland", lat:68.9208, lng:27.0000 }, // Lapland
+  // Netherlands
+  { name:"Netherlands", lat:52.3676, lng:4.9041 }, // Amsterdam
+  { name:"Netherlands", lat:52.0116, lng:4.3571 }, // The Hague coast
+  // Poland
+  { name:"Poland", lat:52.2297, lng:21.0122 }, // Warsaw
+  { name:"Poland", lat:50.0647, lng:19.9450 }, // Krakow
+  // Ukraine
+  { name:"Ukraine", lat:50.4501, lng:30.5234 }, // Kyiv
+  { name:"Ukraine", lat:46.4825, lng:30.7233 }, // Odesa coast
+  // Romania
+  { name:"Romania", lat:44.4268, lng:26.1025 }, // Bucharest
+  { name:"Romania", lat:45.5150, lng:25.3673 }, // Transylvania/Bran
+  // Hungary
+  { name:"Hungary", lat:47.4979, lng:19.0402 }, // Budapest
+  { name:"Hungary", lat:46.9000, lng:17.9000 }, // Lake Balaton
+  // Czech Republic
+  { name:"Czech Republic", lat:50.0755, lng:14.4378 }, // Prague
+  // Austria
+  { name:"Austria", lat:48.2082, lng:16.3738 }, // Vienna
+  { name:"Austria", lat:47.5162, lng:14.5501 }, // Alps
+  // Portugal
+  { name:"Portugal", lat:38.7223, lng:-9.1393  }, // Lisbon
+  { name:"Portugal", lat:41.1496, lng:-8.6109  }, // Porto
+  // United Arab Emirates
+  { name:"United Arab Emirates", lat:25.2048, lng:55.2708 }, // Dubai
+  { name:"United Arab Emirates", lat:24.4539, lng:54.3773 }, // Abu Dhabi
+  // Saudi Arabia locations covered above
+  // Iraq
+  { name:"Iraq", lat:33.3152, lng:44.3661 }, // Baghdad
+  { name:"Iraq", lat:30.9636, lng:46.1061 }, // Basra marshes
+  // Israel
+  { name:"Israel", lat:31.7683, lng:35.2137 }, // Jerusalem
+  { name:"Israel", lat:32.0853, lng:34.7818 }, // Tel Aviv
+  // Kazakhstan
+  { name:"Kazakhstan", lat:51.1801, lng:71.4460 }, // Nur-Sultan
+  { name:"Kazakhstan", lat:43.2220, lng:76.8512 }, // Almaty
+  // Uzbekistan
+  { name:"Uzbekistan", lat:39.6270, lng:66.9749 }, // Samarkand
+  { name:"Uzbekistan", lat:41.2995, lng:69.2401 }, // Tashkent
+  // Bolivia
+  { name:"Bolivia", lat:-16.5000, lng:-68.1193 }, // La Paz
+  { name:"Bolivia", lat:-20.1338, lng:-67.4891 }, // Salar de Uyuni
+  // Ecuador
+  { name:"Ecuador", lat:-1.8312, lng:-78.1834 }, // Chimborazo
+  { name:"Ecuador", lat:-0.2295, lng:-78.5243 }, // Quito
+  // Venezuela
+  { name:"Venezuela", lat:6.4238,  lng:-66.5897 }, // Gran Sabana
+  { name:"Venezuela", lat:10.4806, lng:-66.9036 }, // Caracas
+  // Ghana
+  { name:"Ghana", lat:7.9465, lng:-1.0232 }, // Kumasi
+  { name:"Ghana", lat:5.6037, lng:-0.1870 }, // Accra coast
+  // Algeria
+  { name:"Algeria", lat:28.0339, lng:1.6596  }, // Sahara
+  { name:"Algeria", lat:36.7372, lng:3.0865  }, // Algiers
+  // Myanmar
+  { name:"Myanmar", lat:21.9162, lng:95.9560 }, // Bagan temples
+  { name:"Myanmar", lat:16.8661, lng:96.1951 }, // Yangon
+  // Bangladesh
+  { name:"Bangladesh", lat:23.8103, lng:90.4125 }, // Dhaka
+  { name:"Bangladesh", lat:21.4272, lng:92.0058 }, // Cox's Bazar beach
+  // Oman
+  { name:"Oman", lat:23.5880, lng:58.3829 }, // Muscat
+  { name:"Oman", lat:22.5000, lng:59.5000 }, // Wahiba Sands desert
+  // Democratic Republic of Congo
+  { name:"Democratic Republic of Congo", lat:-4.4419, lng:15.2663 }, // Kinshasa
+  { name:"Democratic Republic of Congo", lat:-1.6596, lng:29.2208 }, // Virunga volcanoes
+  // Sudan
+  { name:"Sudan", lat:12.8628, lng:30.2176 }, // Khartoum
+  { name:"Sudan", lat:16.9388, lng:33.5000 }, // Meroe pyramids
+  // Pakistan
+  { name:"Pakistan", lat:33.6844, lng:73.0479 }, // Islamabad
+  { name:"Pakistan", lat:35.5374, lng:75.5122 }, // K2 / Karakoram
+  { name:"Pakistan", lat:24.8607, lng:67.0011 }, // Karachi coast
+  // Afghanistan
+  { name:"Afghanistan", lat:34.5553, lng:69.2075 }, // Kabul
+  { name:"Afghanistan", lat:34.4298, lng:62.1434 }, // Herat
+  // Denmark
+  { name:"Denmark", lat:55.6761, lng:12.5683 }, // Copenhagen
+  { name:"Denmark", lat:56.0000, lng:8.0000  }, // Jutland coast
+  // Cuba
+  { name:"Cuba", lat:23.1136,  lng:-82.3666 }, // Havana
+  { name:"Cuba", lat:20.0171,  lng:-75.8110 }, // Santiago de Cuba
+  // Ethiopia
+  { name:"Ethiopia", lat:9.0300,  lng:38.7400 }, // Addis Ababa
+  { name:"Ethiopia", lat:9.1450,  lng:40.4897 }, // Danakil Depression
+  // Morocco extra
+  { name:"Morocco", lat:34.0209, lng:-5.0067 }, // Fes medina
+];
+
+
+const ALL_COUNTRIES = [
+  "Afghanistan","Albania","Algeria","Andorra","Angola","Argentina","Armenia",
+  "Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Belarus",
+  "Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina",
+  "Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cambodia",
+  "Cameroon","Canada","Central African Republic","Chad","Chile","China",
+  "Colombia","Comoros","Costa Rica","Croatia","Cuba","Cyprus","Czech Republic",
+  "Democratic Republic of Congo","Denmark","Djibouti","Dominican Republic",
+  "Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia",
+  "Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia",
+  "Germany","Ghana","Greece","Guatemala","Guinea","Guinea-Bissau","Guyana",
+  "Haiti","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq",
+  "Ireland","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya",
+  "Kosovo","Kuwait","Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia",
+  "Libya","Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi",
+  "Malaysia","Maldives","Mali","Malta","Mauritania","Mauritius","Mexico",
+  "Moldova","Monaco","Mongolia","Montenegro","Morocco","Mozambique","Myanmar",
+  "Namibia","Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria",
+  "North Korea","North Macedonia","Norway","Oman","Pakistan","Palestine",
+  "Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland",
+  "Portugal","Qatar","Romania","Russia","Rwanda","Saudi Arabia","Senegal",
+  "Serbia","Sierra Leone","Singapore","Slovakia","Slovenia","Somalia",
+  "South Africa","South Korea","South Sudan","Spain","Sri Lanka","Sudan",
+  "Suriname","Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania",
+  "Thailand","Timor-Leste","Togo","Trinidad and Tobago","Tunisia","Turkey",
+  "Turkmenistan","Uganda","Ukraine","United Arab Emirates","United Kingdom",
+  "United States","Uruguay","Uzbekistan","Venezuela","Vietnam","Yemen",
+  "Zambia","Zimbabwe"
+];
+
+const ZOOMS = [14, 12, 10, 8, 6, 4];
+const MAX   = 6;
+
+// 5 hints per country — vague to slightly less vague
+const HINTS = {
+  "Australia":       ["Spans more than one time zone","An entire continent to itself","Southern Hemisphere, far from most","English is spoken here","Famous for wildlife found nowhere else on Earth"],
+  "Brazil":          ["Largest country in its continent","A vast river system runs through it","Portuguese is the official language","Hosts one of the world's most famous carnivals","Borders almost every country in its continent"],
+  "Egypt":           ["A great river defines its geography","Located where two continents almost meet","Arabic-speaking nation","Ancient monuments here are among the oldest on Earth","Northern Africa"],
+  "France":          ["A Romance language is spoken here","Known for its wine and cuisine worldwide","Shares borders with many Western European nations","Has territory outside its home continent","Home to one of the world's most visited cities"],
+  "China":           ["The world's most populous country","Borders more countries than almost any other","One of the oldest continuous civilisations","Has a vast wall built across its northern landscape","Located in East Asia"],
+  "United States":   ["A federal republic with 50 states","Spans from Atlantic to Pacific","English is the primary language","Includes territories in the Pacific and Caribbean","Located in North America"],
+  "Japan":           ["An archipelago nation","Located in East Asia","Known for its ancient temples and modern technology","Has one of the world's most iconic mountains","Drives on the left side of the road"],
+  "India":           ["Second most populous country on Earth","A subcontinent in its own right","Home to a major river delta in the east","One of the world's oldest civilisations","Located in South Asia"],
+  "Italy":           ["Surrounded by sea on three sides","A Romance language is spoken here","Once the centre of a vast ancient empire","Located in Southern Europe","Has two independent states within its borders"],
+  "Greece":          ["A Mediterranean nation with thousands of islands","Known for its ancient philosophical heritage","Located in Southeast Europe","Part of the Balkan Peninsula","The birthplace of the Olympics"],
+  "Spain":           ["Located on the Iberian Peninsula","A Romance language is spoken here","Shares a peninsula with one other large nation","Has territory in North Africa","Known for flamenco and bullfighting"],
+  "Germany":         ["Located in Central Europe","German is the official language","One of Europe's largest economies","Divided into the East and West during the Cold War","Borders nine other countries"],
+  "United Kingdom":  ["An island nation off Northwest Europe","Drives on the left","English is spoken here","A constitutional monarchy","Once ruled the largest empire in history"],
+  "Canada":          ["Second largest country by area","Located in North America","Bilingual — English and French","Shares the world's longest land border with one neighbour","Known for vast wilderness and cold winters"],
+  "Mexico":          ["Located between North and Central America","Spanish is spoken here","Borders the USA to the north","Home to ancient Aztec and Maya civilisations","Has coastlines on two different oceans"],
+  "Argentina":       ["Located in South America","Spanish is spoken here","One of the southernmost inhabited places on Earth","Known for its beef and tango","Shares the Andes mountain range with its western neighbour"],
+  "South Africa":    ["Located at the southern tip of Africa","Has 11 official languages","Surrounded by ocean on three sides","Known for its diverse wildlife and game reserves","Home to Table Mountain"],
+  "Nigeria":         ["Most populous country in Africa","Located in West Africa","English is the official language","Major oil producer","Home to the city of Lagos — one of Africa's largest"],
+  "Kenya":           ["Located in East Africa","Straddles the equator","Famous for its safari wildlife","Home to part of the Great Rift Valley","Swahili and English are official languages"],
+  "Morocco":         ["Located in Northwest Africa","Arabic and French are widely spoken","Has both Atlantic and Mediterranean coastlines","The Sahara desert begins here","Gateway between Africa and Europe"],
+  "Ethiopia":        ["Located in the Horn of Africa","One of the world's oldest independent nations","Amharic is the official language","Said to be the birthplace of coffee","Has highlands among the most elevated in Africa"],
+  "Saudi Arabia":    ["Located on the Arabian Peninsula","Arabic is the official language","Contains the two holiest cities in Islam","World's largest oil exporter","Mostly desert landscape"],
+  "Iran":            ["Located between the Middle East and Central Asia","Persian is the official language","Once the centre of a vast ancient empire","Borders the Caspian Sea to the north","A major oil and gas producer"],
+  "Turkey":          ["Straddles two continents","Turkish is the official language","Once the heart of the Ottoman Empire","Has coastlines on three different seas","Located between Europe and Asia"],
+  "Indonesia":       ["The world's largest archipelago nation","Located in Southeast Asia","Largest Muslim-majority country by population","Spans a huge east-west distance","Has many active volcanoes"],
+  "Thailand":        ["Located in Southeast Asia","Known for its Buddhist temples","Never colonised by a European power","A major destination for tourism in Asia","The Thai language is tonal"],
+  "Vietnam":         ["Located in Southeast Asia","Has a long, narrow shape on the map","A former French colony","Has coastlines along the South China Sea","Vietnamese is the official language"],
+  "Philippines":     ["An archipelago of over 7,000 islands","Located in Southeast Asia","English and Filipino are official languages","Frequently hit by typhoons","Located in the Pacific Ring of Fire"],
+  "South Korea":     ["Located on a peninsula in East Asia","Korean is the official language","One of the world's most technologically advanced nations","Shares a heavily militarised border to the north","Home to K-pop and Korean cinema"],
+  "New Zealand":     ["An island nation in the Pacific","English and Māori are official languages","Located southeast of Australia","Known for its fjords and dramatic landscapes","Has a population of roughly 5 million"],
+  "Pakistan":        ["Located in South Asia","Urdu is the official language","Has some of the world's highest mountain peaks","Borders India to the east","Has a coastline on the Arabian Sea"],
+  "Ukraine":         ["Located in Eastern Europe","Ukrainian is the official language","The largest country entirely within Europe","Known for its vast wheat-producing plains","Borders the Black Sea to the south"],
+  "Poland":          ["Located in Central Europe","A Slavic language is spoken here","Has no natural borders on its east or west","Landlocked between Germany and former Soviet states","Catholic-majority nation"],
+  "Netherlands":     ["Located in Western Europe","Parts of this country sit below sea level","Known for windmills, cycling, and tulips","Dutch is the official language","Has a coastline on the North Sea"],
+  "Sweden":          ["Located in Northern Europe","Scandinavian country","Has a very long coastline on the Baltic Sea","Swedish is the official language","Known for high quality of life and design"],
+  "Norway":          ["Located in Northern Europe","Scandinavian country","Has deep, dramatic coastal inlets","Norwegian is the official language","Can see the Northern Lights from its northern regions"],
+  "Switzerland":     ["Landlocked in Central Europe","Has four official languages","Home to the Alps mountain range","Known for banking, chocolate, and watches","Never been at war in modern history"],
+  "Portugal":        ["Located on the Iberian Peninsula","Portuguese is spoken here","Has an Atlantic coastline","Once built one of history's great maritime empires","Located in Southwest Europe"],
+  "Peru":            ["Located in South America","Spanish is the official language","Home to one of the world's most famous ancient ruins","Includes part of the Amazon rainforest","The potato was first cultivated here"],
+  "Colombia":        ["Located in South America","Spanish is the official language","The only country in South America with both Pacific and Caribbean coasts","Major coffee producer","Named after a famous explorer"],
+  "Chile":           ["Extremely long and narrow on the map","Located in South America","Spanish is the official language","Has the world's driest non-polar desert","Runs the entire length of its continent's western edge"],
+  "Cuba":            ["A Caribbean island nation","Spanish is the official language","Located south of Florida","Known for its cigars and salsa music","Has had a communist government since 1959"],
+  "Iceland":         ["Located in the North Atlantic","Geologically very active — volcanoes and geysers","Norse language is spoken here","Has a very small population for its size","Often visible from space due to its ice and volcanic features"],
+  "Israel":          ["Located in the Middle East","Hebrew is the official language","Has coastlines on two different bodies of water","Home to holy sites for three major religions","One of the most densely populated countries in its region"],
+  "Jordan":          ["Located in the Middle East","Arabic is the official language","Landlocked except for a tiny Red Sea coastline","Home to one of the ancient world's most remarkable cities","Known for its rose-red rock landscapes"],
+  "Malaysia":        ["Located in Southeast Asia","Split into two main landmasses separated by sea","Malay is the official language","Known for its rainforests and biodiversity","Home to one of the world's most iconic twin skyscrapers"],
+  "Cambodia":        ["Located in Southeast Asia","Khmer is the official language","Home to one of the world's largest religious monuments","Has the Mekong river flowing through it","A French colony until the mid-20th century"],
+  "Nepal":           ["Located in South Asia","Nepali is the official language","Contains the world's highest mountain","Landlocked between two giants","Mainly Hindu with significant Buddhist influence"],
+  "Sri Lanka":       ["A teardrop-shaped island","Located in South Asia","Sinhalese and Tamil are official languages","Known for tea production","Separated from India by a narrow strait"],
+  "Tanzania":        ["Located in East Africa","Swahili is the official language","Home to Africa's highest mountain","Has a famous wildlife-rich plain in its north","Includes a large island off its coast"],
+  "Ghana":           ["Located in West Africa","English is the official language","First country in sub-Saharan Africa to gain independence","Known for cocoa and gold exports","Located just above the equator"],
+  "Algeria":         ["Largest country in Africa by area","Located in North Africa","Arabic and French are widely spoken","Most of its territory is Sahara desert","Has a Mediterranean coastline in the north"],
+  "Venezuela":       ["Located in South America","Spanish is the official language","Has the world's highest waterfall","Has a Caribbean coastline","Major oil reserves, despite economic struggles"],
+  "Ecuador":         ["Located in South America","Named after the line that runs through it","Spanish is the official language","Includes a famous chain of volcanic islands in the Pacific","Shares the Andes with its neighbours"],
+  "Bolivia":         ["Landlocked in South America","Spanish is the official language","Contains the world's largest salt flat","Has one of the highest capital cities in the world","Shares borders with five other countries"],
+  "Hungary":         ["Landlocked in Central Europe","Hungarian is a unique language unrelated to most European languages","Known for its thermal baths","A large lake lies in its west","Located on the Danube river"],
+  "Czech Republic":  ["Landlocked in Central Europe","Czech is the official language","Known for its medieval architecture and beer","Located in the heart of Europe","Borders Germany, Austria, Poland, and Slovakia"],
+  "Romania":         ["Located in Southeast Europe","Romanian is a Romance language","Home to Transylvania — a famous region in fiction","Has a coastline on the Black Sea","The Carpathian mountains run through it"],
+  "Austria":         ["Landlocked in Central Europe","German is the official language","Known for classical music and Alpine scenery","Once the heart of a great European empire","Shares borders with eight countries"],
+  "Denmark":         ["Located in Northern Europe","Scandinavian country","The southernmost Nordic nation","Connected to mainland Europe by a peninsula","Known for design, sustainability, and Vikings"],
+  "Finland":         ["Located in Northern Europe","Scandinavian country","Finnish is unrelated to most European languages","Has thousands of lakes","Reindeer outnumber humans in the north"],
+  "United Arab Emirates": ["Located on the Arabian Peninsula","Arabic is the official language","Known for its ultra-modern cities in the desert","Has coastlines on the Persian Gulf and Gulf of Oman","One of the wealthiest nations per capita"],
+  "Qatar":           ["A small peninsula in the Middle East","Arabic is the official language","Borders only one other country by land","One of the world's wealthiest nations per capita","Hosted a major global sporting event in 2022"],
+  "Iraq":            ["Located in the Middle East","Arabic is the official language","Home to ancient Mesopotamia — one of civilisation's cradles","The Tigris and Euphrates rivers flow through it","Major oil producer"],
+  "Myanmar":         ["Located in Southeast Asia","Burmese is the official language","Has the longest river in Southeast Asia","Known for thousands of ancient Buddhist temples","Borders five countries"],
+  "Bangladesh":      ["Located in South Asia","Bengali is the official language","One of the most densely populated nations on Earth","Much of its territory is a river delta","Has a short coastline on the Bay of Bengal"],
+  "Kazakhstan":      ["Largest landlocked country in the world","Located in Central Asia","Kazakh and Russian are official languages","Vast steppe grasslands dominate its landscape","Home to a famous space launch site"],
+  "Uzbekistan":      ["Landlocked in Central Asia","Uzbek is the official language","Once a major stop on the ancient Silk Road","Known for stunning blue-tiled Islamic architecture","Borders five other landlocked countries"],
+  "Afghanistan":     ["Landlocked in Central Asia / South Asia","Pashto and Dari are official languages","Mountainous, with the Hindu Kush range running through it","Has seen conflict for decades","Borders six countries"],
+  "Oman":            ["Located on the Arabian Peninsula","Arabic is the official language","Has coastlines on both the Arabian Sea and Gulf of Oman","Known for frankincense and dramatic mountain scenery","Borders Saudi Arabia, UAE, and Yemen"],
+  "Democratic Republic of Congo": ["Largest country in sub-Saharan Africa","Located in Central Africa","French is the official language","The Congo river — second longest in Africa — flows through it","Has vast tropical rainforests"],
+  "Sudan":           ["Located in Northeast Africa","Arabic is the official language","Has more ancient pyramids than Egypt","The Nile flows through it","Borders nine countries"],
+};
+
+
+function randomAnswer(excludeName) {
+  let pick;
+  do { pick = ANSWERS[Math.floor(Math.random() * ANSWERS.length)]; }
+  while (excludeName && pick.name === excludeName);
+  return Object.assign({}, pick);
+}
+
+let gameMode = 'daily';
+let dailyStatus = null; // { won: bool, guesses: number } or null if not played today
+let ANSWER = randomAnswer();
+let guessCount = 0, done = false, won = false, results = [];
+
+function getTodayKey() {
+  return 'mapcode_daily_' + new Date().toLocaleDateString('en-CA');
+}
+
+function getDailyAnswer() {
+  const epoch = new Date('2026-01-01T00:00:00Z');
+  const now = new Date(); now.setHours(0,0,0,0);
+  const day = Math.floor((now - epoch) / 86400000);
+  return ANSWERS[((day % ANSWERS.length) + ANSWERS.length) % ANSWERS.length];
+}
+
+function checkDailyStatus() {
+  const key = getTodayKey();
+  const saved = localStorage.getItem(key);
+  if (saved) {
+    dailyStatus = JSON.parse(saved);
+    return dailyStatus;
+  }
+  return null;
+}
+
+function saveDailyResult(won, guesses, guessesUsed) {
+  if (gameMode !== 'daily') return;
+  const key = getTodayKey();
+  localStorage.setItem(key, JSON.stringify({ won, guesses, guessesUsed }));
+  dailyStatus = { won, guesses, guessesUsed };
+}
+
+function loadGameForMode() {
+  if (gameMode === 'daily') {
+    ANSWER = getDailyAnswer();
+    checkDailyStatus();
+  } else {
+    ANSWER = randomAnswer();
+    dailyStatus = null;
+  }
+  guessCount = 0; done = false; won = false; results = [];
+  map.setView([ANSWER.lat, ANSWER.lng], ZOOMS[0], { animate: false });
+  clearBorder();
+  renderDots(); updateViewBadge(); updatePips();
+  document.getElementById('feedback').style.display = 'none';
+  document.getElementById('hint-box').style.display = 'none';
+  document.getElementById('history').innerHTML = '';
+  document.getElementById('country-input').value = '';
+
+  // Check if daily already played
+  if (gameMode === 'daily' && dailyStatus) {
+    document.getElementById('country-input').disabled = true;
+    document.getElementById('guess-btn').disabled = true;
+    if (dailyStatus.won) {
+      done = true;
+      document.getElementById('feedback').textContent = `✅ Solved in ${dailyStatus.guesses}/6`;
+      document.getElementById('feedback').className = 'fb-correct';
+      document.getElementById('feedback').style.display = 'block';
+      document.getElementById('share-btn').style.display = 'block';
+    } else {
+      done = true;
+      document.getElementById('feedback').textContent = '❌ Come back tomorrow for a new puzzle';
+      document.getElementById('feedback').className = 'fb-end';
+      document.getElementById('feedback').style.display = 'block';
+    }
+  } else {
+    document.getElementById('country-input').disabled = false;
+    document.getElementById('guess-btn').disabled = false;
+    document.getElementById('share-btn').style.display = 'none';
+    document.getElementById('again-btn').style.display = 'none';
+  }
+}
+
+const map = L.map('map', {
+  center: [ANSWER.lat, ANSWER.lng], zoom: ZOOMS[0],
+  dragging: false, zoomControl: false, scrollWheelZoom: false,
+  doubleClickZoom: false, touchZoom: false, keyboard: false,
+  attributionControl: false,
+});
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 19, attribution: ''
+}).addTo(map);
+
+function renderDots() {
+  const row = document.getElementById('dots-row');
+  row.innerHTML = '';
+  for (let i = 0; i < MAX; i++) {
+    const state = i < results.length ? results[i] : 'unused';
+    const d = document.createElement('div');
+    d.className = `g-dot ${state}${i === results.length - 1 ? ' new' : ''}`;
+    d.textContent = state === 'correct' ? '✓' : state === 'wrong' ? '✗' : String(i + 1);
+    row.appendChild(d);
+  }
+}
+function updateViewBadge() {
+  document.getElementById('view-badge').textContent = `VIEW ${Math.min(guessCount + 1, MAX)} / ${MAX}`;
+}
+function updatePips() {
+  for (let i = 0; i < MAX; i++) {
+    const pip = document.getElementById(`pip-${i}`);
+    pip.className = i < guessCount ? 'zoom-pip used' : i === guessCount ? 'zoom-pip active' : 'zoom-pip';
+  }
+}
+function showFeedback(msg, type) {
+  const fb = document.getElementById('feedback');
+  fb.textContent = msg; fb.className = `fb-${type}`; fb.style.display = 'block';
+  if (!done) setTimeout(() => { fb.style.display = 'none'; }, 2200);
+}
+function showHint(guessNum) {
+  const hints = HINTS[ANSWER.name];
+  if (!hints || guessNum < 1 || guessNum > hints.length) return;
+  const box = document.getElementById('hint-box');
+  document.getElementById('hint-text').textContent = hints[guessNum - 1];
+  box.style.display = 'block';
+}
+let borderLayer = null;
+async function showCountryBorder() {
+  if (borderLayer) { map.removeLayer(borderLayer); borderLayer = null; }
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(ANSWER.name)}&polygon_geojson=1&format=json&limit=1`,
+      { headers: { 'Accept-Language': 'en' } }
+    );
+    const data = await res.json();
+    if (data[0]?.geojson) {
+      borderLayer = L.geoJSON(data[0].geojson, {
+        style: { color: '#22d3ee', weight: 2, fillColor: '#22d3ee', fillOpacity: 0.12, dashArray: '4 3' }
+      }).addTo(map);
+    }
+  } catch(e) {}
+}
+function clearBorder() {
+  if (borderLayer) { map.removeLayer(borderLayer); borderLayer = null; }
+}
+function addHistory(country, correct) {
+  const h = document.getElementById('history');
+  const el = document.createElement('div');
+  el.className = `h-item ${correct ? 'correct' : 'wrong'}`;
+  el.innerHTML = `<span class="h-icon">${correct ? '✅' : '❌'}</span><span class="h-country">${country}</span><span class="h-label">${correct ? 'Correct!' : `Guess ${guessCount}/${MAX}`}</span>`;
+  h.appendChild(el);
+}
+function endGame(correct) {
+  done = true; won = correct;
+  document.getElementById('country-input').disabled = true;
+  document.getElementById('guess-btn').disabled      = true;
+  if (gameMode === 'daily') {
+    saveDailyResult(correct, guessCount, results);
+    document.getElementById('share-btn').style.display = 'block';
+    document.getElementById('again-btn').style.display = 'none';
+  } else {
+    document.getElementById('share-btn').style.display = 'block';
+    document.getElementById('again-btn').style.display = 'flex';
+  }
+  if (correct) {
+    showFeedback(`🎉 Nice one! It was ${ANSWER.name}.`, 'correct');
+  } else {
+    if (gameMode === 'unlimited') {
+      showFeedback(`The answer was ${ANSWER.name}. Try again?`, 'end');
+      map.flyTo([ANSWER.lat, ANSWER.lng], 4, { animate: true, duration: 1.4 });
+    } else {
+      showFeedback(`The answer was ${ANSWER.name}. Better luck tomorrow!`, 'end');
+      map.flyTo([ANSWER.lat, ANSWER.lng], 4, { animate: true, duration: 1.4 });
+    }
+  }
+}
+function resetGame() {
+  if (gameMode === 'daily') {
+    location.reload();
+    return;
+  }
+  ANSWER = randomAnswer(ANSWER.name);
+  guessCount = 0; done = false; won = false; results = [];
+  document.getElementById('country-input').disabled = false;
+  document.getElementById('guess-btn').disabled      = false;
+  document.getElementById('share-btn').style.display = 'none';
+  document.getElementById('again-btn').style.display = 'none';
+  document.getElementById('feedback').style.display = 'none';
+  document.getElementById('hint-box').style.display = 'none';
+  document.getElementById('history').innerHTML = '';
+  document.getElementById('country-input').value = '';
+  clearBorder();
+
+  const shade = document.getElementById('map-shade');
+  shade.classList.add('down');
+  shade.classList.remove('up');
+  setTimeout(() => {
+    map.stop();
+    map.setView([ANSWER.lat, ANSWER.lng], ZOOMS[0], { animate: false, duration: 0 });
+    map.invalidateSize();
+    setTimeout(() => {
+      shade.classList.add('up');
+      shade.classList.remove('down');
+    }, 500);
+  }, 450);
+  renderDots(); updateViewBadge(); updatePips();
+}
+function makeGuess(countryOverride) {
+  if (done) return;
+  const input = document.getElementById('country-input');
+  const raw = (countryOverride || input.value).trim();
+  if (!raw) return;
+  const match = ALL_COUNTRIES.find(c => c.toLowerCase() === raw.toLowerCase());
+  if (!match) { showFeedback('Not a recognised country — check spelling.', 'wrong'); return; }
+  const correct = match.toLowerCase() === ANSWER.name.toLowerCase();
+  results.push(correct ? 'correct' : 'wrong');
+  guessCount++;
+  input.value = '';
+  renderDots(); addHistory(match, correct);
+  if (correct) { endGame(true); return; }
+  if (guessCount >= MAX) { endGame(false); return; }
+  map.flyTo([ANSWER.lat, ANSWER.lng], ZOOMS[guessCount], { animate: true, duration: 1.4 });
+  updateViewBadge(); updatePips();
+  showFeedback(`Not ${match} — zooming out…`, 'wrong');
+  showHint(guessCount);
+  if (guessCount === MAX - 1) showCountryBorder();
+}
+function shareText() {
+  const score = won ? `${guessCount}/${MAX}` : `X/${MAX}`;
+  const row = results.map(r => r === 'correct' ? '🟩' : '🟥').join('') + '⬜'.repeat(MAX - results.length);
+  if (gameMode === 'daily') {
+    const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return `Mapcode Daily ${date} ${score}\n${row}\nmapcode.game`;
+  } else {
+    return `Mapcode Unlimited ${score}\n${row}\nmapcode.game`;
+  }
+}
+
+const dl = document.getElementById('countries-list');
+ALL_COUNTRIES.forEach(c => { const o = document.createElement('option'); o.value = c; dl.appendChild(o); });
+
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    gameMode = btn.dataset.mode;
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (gameMode === 'party') {
+      showPartyMode();
+    } else {
+      hidePartyMode();
+      loadGameForMode();
+    }
+  });
+});
+
+/* ===== FIREBASE INITIALIZATION ===== */
+const firebaseConfig = {
+  apiKey: "AIzaSyBBnT9_q414Jd-oAuQrpBHHn09230fCYu8",
+  authDomain: "birdseye-party.firebaseapp.com",
+  projectId: "birdseye-party",
+  storageBucket: "birdseye-party.firebasestorage.app",
+  messagingSenderId: "302150602185",
+  appId: "1:302150602185:web:98272e8b1e113d26c1ac18"
+};
+
+let db;
+if (typeof firebase !== 'undefined') {
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.database();
+} else {
+  console.error('Firebase SDK failed to load');
+}
+
+/* ===== PARTY MODE STATE ===== */
+let partyState = {
+  hostName: null,
+  roomCode: null,
+  isHost: false,
+  playerName: null,
+  playerId: null,
+  roomRef: null,
+  playersListener: null,
+  questionListener: null,
+  statusListener: null,
+  roundTimeout: null,
+  roundStartTime: null,
+  useScoring: false,
+  guessCount: {},
+  scores: {},
+  roundScores: {},
+  timerInterval: null,
+  timeRemaining: 60,
+};
+
+function generateRoomCode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 4; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+function showPartyMode() {
+  document.getElementById('map-wrap').style.display = 'none';
+  document.getElementById('game-area').style.display = 'none';
+  document.getElementById('how-to').style.display = 'none';
+  document.getElementById('party-container').style.display = 'flex';
+  showPartyScreen('party-create');
+}
+
+function hidePartyMode() {
+  // Clean up party map instance
+  if (partyMapInstance) {
+    partyMapInstance.remove();
+    partyMapInstance = null;
+  }
+
+  document.getElementById('party-container').style.display = 'none';
+  document.getElementById('map-wrap').style.display = 'block';
+  document.getElementById('game-area').style.display = 'block';
+  document.getElementById('how-to').style.display = 'block';
+}
+
+function showPartyScreen(screenId) {
+  document.querySelectorAll('.party-screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(screenId).classList.add('active');
+}
+
+document.getElementById('party-create-btn').addEventListener('click', async () => {
+  if (!db) {
+    alert('Firebase is still loading. Please wait a moment and try again.');
+    return;
+  }
+
+  const hostName = document.getElementById('party-host-name').value.trim();
+  if (!hostName) {
+    alert('Please enter your name');
+    return;
+  }
+
+  const code = generateRoomCode();
+  partyState.hostName = hostName;
+  partyState.roomCode = code;
+  partyState.isHost = true;
+  partyState.playerName = hostName;
+
+  try {
+    const playerId = code + '_' + Date.now();
+    await db.ref(`rooms/${code}`).set({
+      host: hostName,
+      status: 'waiting',
+      players: { [playerId]: { name: hostName, isHost: true } },
+      createdAt: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    // Auto-remove host if they disconnect
+    db.ref(`rooms/${code}/players/${playerId}`).onDisconnect().remove();
+
+    partyState.playerId = playerId;
+    document.getElementById('party-code').textContent = code;
+    document.getElementById('party-code-display').style.display = 'block';
+    document.getElementById('party-create-btn').style.display = 'none';
+    document.getElementById('party-host-name').style.display = 'none';
+    document.getElementById('party-waiting-btn').style.display = 'block';
+
+    partyState.roomRef = db.ref(`rooms/${code}`);
+    listenToLobby();
+  } catch (error) {
+    console.error('Error creating room:', error);
+    alert('Failed to create room. Check your connection.');
+  }
+});
+
+document.getElementById('party-join-btn').addEventListener('click', async () => {
+  const playerName = document.getElementById('party-player-name').value.trim();
+  const code = document.getElementById('party-join-code').value.trim().toUpperCase();
+
+  if (!playerName) {
+    alert('Please enter your name');
+    return;
+  }
+  if (!code || code.length !== 4) {
+    alert('Please enter a valid 4-letter code');
+    return;
+  }
+
+  try {
+    const snapshot = await db.ref(`rooms/${code}`).once('value');
+    if (!snapshot.exists()) {
+      alert('Room not found. Check the code.');
+      return;
+    }
+
+    const roomData = snapshot.val();
+    if (Object.keys(roomData.players || {}).length >= 15) {
+      alert('Room is full (max 15 players)');
+      return;
+    }
+
+    partyState.playerName = playerName;
+    partyState.roomCode = code;
+    partyState.isHost = false;
+    partyState.roomRef = db.ref(`rooms/${code}`);
+
+    const playerId = 'player_' + Date.now();
+    partyState.playerId = playerId;
+    await db.ref(`rooms/${code}/players/${playerId}`).set({
+      name: playerName,
+      isHost: false
+    });
+
+    // Auto-remove this player if they disconnect
+    db.ref(`rooms/${code}/players/${playerId}`).onDisconnect().remove();
+
+    // Check if game is already playing (roomData already fetched above)
+    if (roomData.status === 'playing') {
+      showPartyScreen('party-question');
+      listenToQuestion();
+    } else {
+      showPartyScreen('party-lobby');
+      listenToLobby();
+    }
+  } catch (error) {
+    console.error('Error joining room:', error);
+    alert('Failed to join room. Try again.');
+  }
+});
+
+function listenToLobby() {
+  if (partyState.roomRef) {
+    partyState.roomRef.child('players').off();
+  }
+
+  // Show code for host on lobby screen only
+  const codeDisplay = document.getElementById('party-lobby-code');
+  if (partyState.isHost) {
+    codeDisplay.style.display = 'block';
+    document.getElementById('party-lobby-code-text').textContent = partyState.roomCode;
+  } else {
+    codeDisplay.style.display = 'none';
+  }
+
+  partyState.playersListener = partyState.roomRef.child('players').on('value', snapshot => {
+    const players = snapshot.val() || {};
+    const playersList = document.getElementById('party-players-list');
+    playersList.innerHTML = '';
+
+    Object.entries(players).forEach(([key, player]) => {
+      const div = document.createElement('div');
+      div.className = player.isHost ? 'party-player host' : 'party-player';
+      div.textContent = player.name;
+      playersList.appendChild(div);
+    });
+
+    const playerCount = Object.keys(players).length;
+    const title = document.getElementById('party-lobby-title');
+    title.textContent = `${playerCount} player${playerCount !== 1 ? 's' : ''} waiting...`;
+
+    const startBtn = document.getElementById('party-start-btn');
+    if (partyState.isHost && playerCount > 1) {
+      startBtn.style.display = 'block';
+    }
+  });
+
+  // Listen for game status changes (for all players)
+  if (partyState.statusListener) {
+    partyState.roomRef.child('status').off();
+  }
+  partyState.statusListener = partyState.roomRef.child('status').on('value', snapshot => {
+    const status = snapshot.val();
+    if (status === 'playing') {
+      showPartyScreen('party-question');
+      listenToQuestion();
+    }
+  });
+
+  showPartyScreen('party-lobby');
+}
+
+function generateQuestionPool(count = 6) {
+  const pool = [];
+  const used = new Set();
+  while (pool.length < count) {
+    const pick = ANSWERS[Math.floor(Math.random() * ANSWERS.length)];
+    if (!used.has(pick.name)) {
+      pool.push(pick);
+      used.add(pick.name);
+    }
+  }
+  return pool;
+}
+
+document.getElementById('party-start-btn').addEventListener('click', async () => {
+  if (!partyState.isHost || !partyState.roomCode) return;
+
+  try {
+    console.log('Starting game with roomRef:', partyState.roomRef);
+
+    // Get player count to determine if we use scoring (2-3 players) or elimination (4+ players)
+    const playersSnapshot = await partyState.roomRef.child('players').once('value');
+    const playerCount = Object.keys(playersSnapshot.val() || {}).length;
+    partyState.useScoring = playerCount >= 2 && playerCount <= 3;
+
+    console.log('Player count:', playerCount, 'Using scoring:', partyState.useScoring);
+
+    // Initialize scores for 2-3 player mode
+    if (partyState.useScoring) {
+      partyState.scores = {};
+      partyState.guessCount = {};
+      Object.keys(playersSnapshot.val() || {}).forEach(playerId => {
+        partyState.scores[playerId] = 0;
+      });
+    }
+
+    const questionPool = generateQuestionPool(6);
+    const currentQuestion = questionPool[0];
+
+    console.log('Question pool generated:', questionPool.length);
+    console.log('Updating room with status=playing');
+
+    const updates = {
+      status: 'playing',
+      questionPool: questionPool.map(q => q.name),
+      currentQuestion: { index: 0, country: currentQuestion.name },
+      round: 1,
+      startedAt: firebase.database.ServerValue.TIMESTAMP,
+      useScoring: partyState.useScoring
+    };
+
+    // Initialize player scores in Firebase for scoring mode
+    if (partyState.useScoring) {
+      Object.keys(playersSnapshot.val() || {}).forEach(playerId => {
+        updates[`players/${playerId}/score`] = 0;
+        updates[`players/${playerId}/guessCount`] = 0;
+      });
+    }
+
+    await partyState.roomRef.update(updates);
+
+    console.log('Room updated successfully');
+    // Show question screen
+    showPartyScreen('party-question');
+    console.log('Screen shown, setting up listeners');
+    listenToQuestion();
+    console.log('Listeners set up');
+  } catch (error) {
+    console.error('Error starting game:', error);
+    console.error('Stack:', error.stack);
+    alert('Failed to start game: ' + (error.message || 'Unknown error'));
+  }
+});
+
+// Party Mode Map Management
+let partyMapInstance = null;
+
+function findCountryCoordinates(countryName) {
+  if (!countryName) return null;
+  const answer = ANSWERS.find(a => a.name.toLowerCase() === countryName.toLowerCase());
+  return answer ? { lat: answer.lat, lng: answer.lng } : null;
+}
+
+function initializePartyMap() {
+  if (partyMapInstance) return partyMapInstance;
+
+  const container = document.getElementById('party-map-preview');
+  if (!container) return null;
+
+  try {
+    partyMapInstance = L.map('party-map-preview', {
+      center: [20, 0],
+      zoom: 2,
+      dragging: false,
+      zoomControl: false,
+      scrollWheelZoom: false,
+      doubleClickZoom: false,
+      touchZoom: false,
+      keyboard: false,
+      attributionControl: false,
+    });
+
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+      attribution: ''
+    }).addTo(partyMapInstance);
+
+    partyMapInstance.invalidateSize();
+    return partyMapInstance;
+  } catch (error) {
+    console.error('Error initializing party map:', error);
+    return null;
+  }
+}
+
+function updatePartyMapView(countryName) {
+  if (!countryName) return;
+
+  const map = initializePartyMap();
+  if (!map) return;
+
+  const coords = findCountryCoordinates(countryName);
+  if (!coords) {
+    console.warn('Coordinates not found for country:', countryName);
+    return;
+  }
+
+  map.flyTo([coords.lat, coords.lng], ZOOMS[0], {
+    animate: true,
+    duration: 1.2
+  });
+
+  // Ensure map size is correct after animation
+  setTimeout(() => {
+    if (map) map.invalidateSize(false);
+  }, 1200);
+}
+
+function listenToQuestion() {
+  if (partyState.roomRef) {
+    partyState.roomRef.child('currentQuestion').off();
+    partyState.roomRef.child('status').off();
+    partyState.roomRef.child('players').off();
+  }
+
+  // Reset answer form
+  document.getElementById('party-answer-input').value = '';
+  document.getElementById('party-answer-input').disabled = false;
+  document.getElementById('party-submit-answer-btn').disabled = false;
+  document.getElementById('party-answer-status').style.display = 'none';
+
+  // Fetch useScoring flag from Firebase (for players to know if they're in scoring mode)
+  partyState.roomRef.once('value', snapshot => {
+    const roomData = snapshot.val();
+    if (roomData && roomData.useScoring !== undefined) {
+      partyState.useScoring = roomData.useScoring;
+    }
+
+    // Show/hide timer and score display based on mode
+    const timerScoreDisplay = document.getElementById('party-timer-score');
+    const guessCountDisplay = document.getElementById('party-guess-count');
+    if (partyState.useScoring) {
+      timerScoreDisplay.style.display = 'flex';
+      guessCountDisplay.style.display = 'block';
+      partyState.timeRemaining = 60;
+      updateTimerDisplay();
+      updateScoreDisplay();
+      startCountdownTimer();
+    } else {
+      timerScoreDisplay.style.display = 'none';
+      guessCountDisplay.style.display = 'none';
+    }
+  });
+
+  partyState.roundStartTime = Date.now();
+
+  partyState.questionListener = partyState.roomRef.child('currentQuestion').on('value', snapshot => {
+    if (!snapshot) return;
+    const q = snapshot.val();
+    if (q) {
+      document.getElementById('party-q-number').textContent = (q.index || 0) + 1;
+      if (q.country) {
+        updatePartyMapView(q.country);
+      }
+    }
+  });
+
+  // Listen for players answering
+  partyState.playersListener = partyState.roomRef.child('players').on('value', snapshot => {
+    if (!snapshot) return;
+    const players = snapshot.val() || {};
+    updateScoreDisplay(); // Update scores if in scoring mode
+    checkRoundComplete(players);
+  });
+
+  // 60-second timeout
+  if (partyState.roundTimeout) clearTimeout(partyState.roundTimeout);
+  partyState.roundTimeout = setTimeout(() => {
+    endRound();
+  }, 60000);
+
+  // Listen for game status to detect when to show results
+  if (partyState.roomRef) {
+    partyState.roomRef.child('status').off();
+  }
+  partyState.statusListener = partyState.roomRef.child('status').on('value', snapshot => {
+    if (!snapshot) return;
+    const status = snapshot.val();
+    if (status === 'round_end') {
+      if (partyState.roundTimeout) clearTimeout(partyState.roundTimeout);
+      if (partyState.timerInterval) clearInterval(partyState.timerInterval);
+      showPartyScreen('party-result');
+      listenToResults();
+    }
+  });
+}
+
+function startCountdownTimer() {
+  if (partyState.timerInterval) clearInterval(partyState.timerInterval);
+  partyState.timerInterval = setInterval(() => {
+    partyState.timeRemaining--;
+    updateTimerDisplay();
+    if (partyState.timeRemaining <= 0) {
+      clearInterval(partyState.timerInterval);
+      partyState.timerInterval = null;
+    }
+  }, 1000);
+}
+
+function updateTimerDisplay() {
+  const timerEl = document.getElementById('party-timer');
+  if (timerEl) {
+    timerEl.textContent = partyState.timeRemaining + 's';
+    // Change color to red when time is running out
+    if (partyState.timeRemaining <= 10) {
+      timerEl.style.color = '#ef4444';
+    } else {
+      timerEl.style.color = '#22d3ee';
+    }
+  }
+}
+
+function updateScoreDisplay() {
+  if (!partyState.useScoring) return;
+
+  partyState.roomRef.once('value', snapshot => {
+    const roomData = snapshot.val();
+    const players = roomData.players || {};
+    let scoresText = [];
+
+    Object.entries(players).forEach(([id, player]) => {
+      const score = player.score || 0;
+      const name = player.name || 'Unknown';
+      const isMe = id === partyState.playerId;
+      scoresText.push(`${isMe ? '👤 ' : ''}${name}: ${score}pts`);
+    });
+
+    const scoresDisplay = document.getElementById('party-scores-display');
+    if (scoresDisplay) {
+      scoresDisplay.innerHTML = scoresText.join(' | ');
+    }
+  });
+}
+
+function checkRoundComplete(players) {
+  const playerList = Object.values(players) || [];
+  const allAnswered = playerList.every(p => p.answered);
+  const totalPlayers = playerList.length;
+
+  if (allAnswered && totalPlayers > 0) {
+    endRound();
+  }
+}
+
+function endRound() {
+  if (partyState.roundTimeout) {
+    clearTimeout(partyState.roundTimeout);
+    partyState.roundTimeout = null;
+  }
+
+  partyState.roomRef.once('value', snapshot => {
+    const roomData = snapshot.val();
+    const players = roomData.players || {};
+    const correctAnswer = (roomData.currentQuestion || {}).country || '';
+
+    if (partyState.useScoring) {
+      // SCORING MODE (2-3 players)
+      const updates = {
+        status: 'round_end',
+        roundEndTime: firebase.database.ServerValue.TIMESTAMP
+      };
+
+      // Calculate points for each player
+      Object.entries(players).forEach(([id, player]) => {
+        let points = 0;
+        const playerAnswer = (player.answer || '').toLowerCase();
+        const isCorrect = playerAnswer === correctAnswer.toLowerCase();
+
+        if (isCorrect && player.guessCount) {
+          // Points: 5 for 1st guess, 4 for 2nd, 3 for 3rd, etc
+          points = Math.max(0, 6 - player.guessCount);
+        }
+
+        // Update player's score and round points
+        const currentScore = player.score || 0;
+        updates[`players/${id}/score`] = currentScore + points;
+        updates[`players/${id}/pointsThisRound`] = points;
+        updates[`players/${id}/isCorrect`] = isCorrect;
+      });
+
+      partyState.roomRef.update(updates).catch(e => console.error('Error ending round:', e));
+    } else {
+      // ELIMINATION MODE (4+ players)
+      let slowestTime = -1;
+      let slowestPlayerIds = [];
+
+      Object.entries(players).forEach(([id, player]) => {
+        if (player.answered && player.answerTime) {
+          if (player.answerTime > slowestTime) {
+            slowestTime = player.answerTime;
+            slowestPlayerIds = [id];
+          } else if (player.answerTime === slowestTime) {
+            slowestPlayerIds.push(id);
+          }
+        }
+      });
+
+      // Update room with eliminated players
+      partyState.roomRef.update({
+        status: 'round_end',
+        eliminated: slowestPlayerIds,
+        roundEndTime: firebase.database.ServerValue.TIMESTAMP
+      }).catch(e => console.error('Error ending round:', e));
+    }
+  });
+}
+
+document.getElementById('party-submit-answer-btn').addEventListener('click', async () => {
+  const answer = document.getElementById('party-answer-input').value.trim();
+  if (!answer) {
+    alert('Please enter an answer');
+    return;
+  }
+
+  // Validate country
+  const match = ALL_COUNTRIES.find(c => c.toLowerCase() === answer.toLowerCase());
+  if (!match) {
+    alert('Not a recognised country');
+    return;
+  }
+
+  try {
+    // Track guess count for scoring mode
+    if (partyState.useScoring) {
+      partyState.guessCount[partyState.playerId] =
+        (partyState.guessCount[partyState.playerId] || 0) + 1;
+      const guessNum = partyState.guessCount[partyState.playerId];
+
+      // Update guess count display
+      const guessCountEl = document.getElementById('party-guess-count');
+      if (guessCountEl) {
+        guessCountEl.textContent = `Attempt ${guessNum} of 6`;
+      }
+    }
+
+    await partyState.roomRef.child('players').child(partyState.playerId).update({
+      answered: true,
+      answerTime: firebase.database.ServerValue.TIMESTAMP,
+      answer: match,
+      guessCount: partyState.useScoring ? (partyState.guessCount[partyState.playerId] || 1) : 0
+    });
+
+    document.getElementById('party-answer-input').disabled = true;
+    document.getElementById('party-submit-answer-btn').disabled = true;
+    document.getElementById('party-answer-status').style.display = 'block';
+  } catch (error) {
+    console.error('Error submitting answer:', error);
+    alert('Failed to submit answer');
+  }
+});
+
+function listenToResults() {
+  partyState.roomRef.once('value', snapshot => {
+    const roomData = snapshot.val();
+    const players = roomData.players || {};
+    const eliminated = roomData.eliminated || [];
+    const currentQ = roomData.currentQuestion || {};
+
+    const content = document.getElementById('party-result-content');
+    let html = `<div style="text-align: center; margin-bottom: 20px;">
+      <div style="font-size: 0.9rem; color: #64748b; margin-bottom: 12px;">Answer: <strong style="color: #22d3ee;">${currentQ.country || '?'}</strong></div>`;
+
+    html += '<div style="display: flex; flex-direction: column; gap: 8px;">';
+
+    if (partyState.useScoring) {
+      // SCORING MODE - show points and scores
+      Object.entries(players).forEach(([id, player]) => {
+        const isSelf = id === partyState.playerId;
+        const isCorrect = player.isCorrect;
+        const pointsThisRound = player.pointsThisRound || 0;
+        const totalScore = player.score || 0;
+        const statusColor = isCorrect ? '#22c55e' : '#dc2626';
+        const statusText = isCorrect ? '✅ Correct' : '❌ Wrong';
+        const mark = isSelf ? ' (You)' : '';
+
+        html += `<div style="padding: 10px; background: #0f1f35; border-radius: 8px; border-left: 3px solid ${statusColor}; color: #cbd5e1;">
+          <div>${player.name}${mark} - ${statusText}</div>
+          <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 4px;">+${pointsThisRound} pts | Total: ${totalScore}</div>
+        </div>`;
+      });
+    } else {
+      // ELIMINATION MODE - show eliminated/safe status
+      Object.entries(players).forEach(([id, player]) => {
+        const isEliminated = eliminated.includes(id);
+        const isSelf = id === partyState.playerId;
+        const status = isEliminated ? '❌ Eliminated' : '✅ Safe';
+        const statusColor = isEliminated ? '#dc2626' : '#22c55e';
+        const mark = isSelf ? ' (You)' : '';
+
+        html += `<div style="padding: 10px; background: #0f1f35; border-radius: 8px; border-left: 3px solid ${statusColor}; color: #cbd5e1;">
+          ${player.name}${mark} - ${status}
+        </div>`;
+      });
+    }
+
+    html += '</div>';
+    content.innerHTML = html;
+
+    // Auto-advance in 4 seconds
+    setTimeout(() => {
+      if (partyState.useScoring) {
+        // SCORING MODE - check if more questions remain
+        if ((currentQ.index || 0) + 1 < 6) {
+          startNextRound();
+        } else {
+          // All questions done - determine winner by score
+          showWinner(players);
+        }
+      } else {
+        // ELIMINATION MODE - check elimination status
+        if (eliminated.length > 0 && eliminated.length < Object.keys(players).length) {
+          // Continue to next question
+          startNextRound();
+        } else if (Object.keys(players).length === 1) {
+          // Winner!
+          showWinner(players);
+        }
+      }
+    }, 4000);
+  });
+}
+
+function startNextRound() {
+  partyState.roomRef.once('value', snapshot => {
+    const roomData = snapshot.val();
+    const players = roomData.players || {};
+    const eliminated = roomData.eliminated || [];
+    const currentQuestion = roomData.currentQuestion || {};
+    const questionPool = roomData.questionPool || [];
+
+    // Move to next question
+    const nextIndex = (currentQuestion.index || 0) + 1;
+    if (nextIndex < questionPool.length) {
+      const updates = {
+        'currentQuestion': { index: nextIndex, country: questionPool[nextIndex] },
+        'status': 'playing',
+        'round': (roomData.round || 1) + 1
+      };
+
+      if (!partyState.useScoring) {
+        // ELIMINATION MODE - remove eliminated players
+        eliminated.forEach(id => {
+          updates[`players/${id}`] = null;
+        });
+        updates['eliminated'] = null; // Reset eliminated for next round
+      }
+
+      // Reset all players' answered status
+      Object.keys(players).forEach(id => {
+        if (partyState.useScoring || !eliminated.includes(id)) {
+          updates[`players/${id}/answered`] = false;
+          updates[`players/${id}/answerTime`] = null;
+          updates[`players/${id}/answer`] = null;
+          updates[`players/${id}/guessCount`] = 0;
+          updates[`players/${id}/pointsThisRound`] = 0;
+        }
+      });
+
+      partyState.roomRef.update(updates).then(() => {
+        showPartyScreen('party-question');
+        listenToQuestion();
+      }).catch(e => console.error('Error starting next round:', e));
+    } else {
+      // Game over - determine winner
+      if (partyState.useScoring) {
+        // Find player with highest score
+        let winnerData = null;
+        let highestScore = -1;
+        Object.entries(players).forEach(([id, player]) => {
+          const score = player.score || 0;
+          if (score > highestScore) {
+            highestScore = score;
+            winnerData = player;
+          }
+        });
+        if (winnerData) showWinner(winnerData);
+      } else {
+        // Find last survivor
+        const survivors = Object.entries(players).filter(([id]) => !eliminated.includes(id));
+        if (survivors.length === 1) {
+          showWinner(survivors[0][1]);
+        }
+      }
+    }
+  });
+}
+
+function showWinner(winnerData) {
+  partyState.roomRef.once('value', snapshot => {
+    const roomData = snapshot.val();
+    const allPlayers = roomData.players || {};
+    const winnerName = winnerData.name || 'Champion';
+
+    let html = `
+      <div style="text-align: center; padding: 40px 20px;">
+        <div style="font-size: 3rem; margin-bottom: 16px;">🏆</div>
+        <h2 style="font-size: 2rem; color: #22d3ee; margin-bottom: 12px;">${winnerName} Wins!</h2>`;
+
+    if (partyState.useScoring) {
+      const winnerScore = winnerData.score || 0;
+      html += `<p style="color: #64748b; font-size: 0.9rem;">Final Score: <strong style="color: #22d3ee;">${winnerScore} points</strong></p>
+        <div style="margin: 20px 0; padding: 15px; background: #0f1f35; border-radius: 8px;">
+          <div style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 10px; text-transform: uppercase;">Final Scores:</div>`;
+
+      // Sort players by score
+      const sortedPlayers = Object.entries(allPlayers)
+        .sort(([, a], [, b]) => (b.score || 0) - (a.score || 0));
+
+      sortedPlayers.forEach(([, player], idx) => {
+        const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉';
+        html += `<div style="color: #cbd5e1; margin: 4px 0;">${medal} ${player.name}: ${player.score || 0} pts</div>`;
+      });
+      html += `</div>`;
+    } else {
+      html += `<p style="color: #64748b; font-size: 0.9rem;">Survived all 6 questions</p>`;
+    }
+
+    html += `
+        <button id="play-again-btn" class="party-btn" style="margin-top: 24px; width: 100%; max-width: 200px;">Play Again</button>
+      </div>
+    `;
+
+    document.getElementById('party-result-content').innerHTML = html;
+
+    document.getElementById('play-again-btn').addEventListener('click', () => {
+      if (partyState.isHost) {
+        resetGameForReplay();
+      } else {
+        hidePartyMode();
+        showPartyScreen('party-create');
+      }
+    });
+  });
+}
+
+function resetGameForReplay() {
+  // Get remaining players
+  partyState.roomRef.once('value', snapshot => {
+    const roomData = snapshot.val();
+    const players = roomData.players || {};
+
+    // Reset for new game with same players
+    const newQuestionPool = generateQuestionPool(6);
+    const updates = {
+      status: 'playing',
+      round: 1,
+      currentQuestion: { index: 0, country: newQuestionPool[0] },
+      questionPool: newQuestionPool.map(q => q.name),
+      eliminated: null
+    };
+
+    // Reset all players
+    Object.keys(players).forEach(id => {
+      updates[`players/${id}/answered`] = false;
+      updates[`players/${id}/answerTime`] = null;
+      updates[`players/${id}/answer`] = null;
+      updates[`players/${id}/guessCount`] = 0;
+
+      // Reset scores for scoring mode
+      if (partyState.useScoring) {
+        updates[`players/${id}/score`] = 0;
+        updates[`players/${id}/pointsThisRound`] = 0;
+      }
+    });
+
+    partyState.roomRef.update(updates).then(() => {
+      // Reset client-side state
+      if (partyState.useScoring) {
+        partyState.scores = {};
+        partyState.guessCount = {};
+        Object.keys(players).forEach(id => {
+          partyState.scores[id] = 0;
+        });
+      }
+      showPartyScreen('party-question');
+      listenToQuestion();
+    }).catch(e => console.error('Error replaying:', e));
+  });
+}
+
+document.getElementById('party-switch-join').addEventListener('click', () => {
+  showPartyScreen('party-join');
+});
+
+document.getElementById('party-switch-create').addEventListener('click', () => {
+  showPartyScreen('party-create');
+});
+
+document.getElementById('party-leave-btn').addEventListener('click', async () => {
+  try {
+    // Remove player from room
+    if (partyState.roomRef && partyState.playerId) {
+      await partyState.roomRef.child('players').child(partyState.playerId).remove();
+    }
+
+    // If host left, close the room
+    if (partyState.isHost && partyState.roomRef) {
+      await partyState.roomRef.remove();
+    }
+  } catch (e) {
+    console.error('Error leaving room:', e);
+  }
+
+  // Clean up listeners
+  if (partyState.roomRef) {
+    partyState.roomRef.off();
+  }
+  if (partyState.roundTimeout) {
+    clearTimeout(partyState.roundTimeout);
+  }
+  if (partyState.timerInterval) {
+    clearInterval(partyState.timerInterval);
+  }
+
+  // Reset state
+  partyState = {
+    hostName: null,
+    roomCode: null,
+    isHost: false,
+    playerName: null,
+    playerId: null,
+    roomRef: null,
+    playersListener: null,
+    questionListener: null,
+    statusListener: null,
+    roundTimeout: null,
+    roundStartTime: null,
+    useScoring: false,
+    guessCount: {},
+    scores: {},
+    roundScores: {},
+    timerInterval: null,
+    timeRemaining: 60
+  };
+  hidePartyMode();
+  showPartyScreen('party-create');
+  document.getElementById('party-host-name').style.display = 'block';
+  document.getElementById('party-create-btn').style.display = 'block';
+  document.getElementById('party-code-display').style.display = 'none';
+  document.getElementById('party-waiting-btn').style.display = 'none';
+  document.getElementById('party-host-name').value = '';
+  document.getElementById('party-player-name').value = '';
+  document.getElementById('party-join-code').value = '';
+});
+
+document.getElementById('again-btn').addEventListener('click', resetGame);
+document.getElementById('share-btn').addEventListener('click', () => {
+  navigator.clipboard.writeText(shareText()).then(() => {
+    const btn = document.getElementById('share-btn');
+    btn.textContent = '✅ Copied!';
+    setTimeout(() => { btn.textContent = '📋 Share Result'; }, 2200);
+  }).catch(() => alert(shareText()));
+});
+document.getElementById('guess-btn').addEventListener('click', () => makeGuess());
+document.getElementById('country-input').addEventListener('keydown', e => { if (e.key === 'Enter') makeGuess(); });
+
+loadGameForMode();
+setTimeout(() => map.invalidateSize(), 100);
+</script>
+</body>
+</html>

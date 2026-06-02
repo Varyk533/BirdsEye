@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0f172a; display: flex; flex-direction: column; align-items: center; gap: 60px; padding: 60px 40px; font-family: 'Segoe UI', sans-serif; }
+  h2 { color: #475569; font-size: 0.7rem; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 16px; text-align: center; }
+  .option { display: flex; flex-direction: column; align-items: center; }
+
+  /* === OPTION A: Pin + Grid === */
+  .logo-a { display: flex; align-items: center; gap: 14px; }
+  .logo-a svg { width: 52px; height: 52px; }
+  .logo-a .wordmark { display: flex; flex-direction: column; line-height: 1; }
+  .logo-a .word-map { font-size: 2rem; font-weight: 900; color: #f1f5f9; letter-spacing: -2px; font-family: 'Georgia', serif; }
+  .logo-a .word-code { font-size: 0.85rem; font-weight: 700; color: #3b82f6; letter-spacing: 6px; text-transform: uppercase; }
+
+  /* === OPTION B: Satellite crosshair === */
+  .logo-b { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .logo-b svg { width: 64px; height: 64px; }
+  .logo-b .wordmark { font-size: 2.4rem; font-weight: 900; letter-spacing: -2px; color: #f1f5f9; font-family: 'Impact', sans-serif; }
+  .logo-b .wordmark span { color: #22d3ee; }
+
+  /* === OPTION C: Retro terminal === */
+  .logo-c { display: flex; align-items: center; gap: 12px; }
+  .logo-c svg { width: 48px; height: 48px; }
+  .logo-c .wordmark { font-size: 2.2rem; font-weight: 900; color: #4ade80; letter-spacing: -1px; font-family: 'Courier New', monospace; text-shadow: 0 0 20px rgba(74,222,128,0.4); }
+  .logo-c .wordmark span { color: #f1f5f9; }
+</style>
+</head>
+<body>
+
+<!-- OPTION A: Map Pin + serif/uppercase combo -->
+<div class="option">
+  <h2>Option A — Editorial / Serif</h2>
+  <div class="logo-a">
+    <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- grid lines -->
+      <line x1="0" y1="17" x2="52" y2="17" stroke="#1e3a5f" stroke-width="1"/>
+      <line x1="0" y1="26" x2="52" y2="26" stroke="#1e3a5f" stroke-width="1"/>
+      <line x1="0" y1="35" x2="52" y2="35" stroke="#1e3a5f" stroke-width="1"/>
+      <line x1="17" y1="0" x2="17" y2="52" stroke="#1e3a5f" stroke-width="1"/>
+      <line x1="26" y1="0" x2="26" y2="52" stroke="#1e3a5f" stroke-width="1"/>
+      <line x1="35" y1="0" x2="35" y2="52" stroke="#1e3a5f" stroke-width="1"/>
+      <!-- pin body -->
+      <circle cx="26" cy="20" r="10" fill="#3b82f6"/>
+      <circle cx="26" cy="20" r="5" fill="#0f172a"/>
+      <!-- pin tail -->
+      <path d="M26 30 L20 44 L26 40 L32 44 Z" fill="#3b82f6"/>
+      <!-- dot in center -->
+      <circle cx="26" cy="20" r="2" fill="#3b82f6"/>
+    </svg>
+    <div class="wordmark">
+      <span class="word-map">Map</span>
+      <span class="word-code">CODE</span>
+    </div>
+  </div>
+</div>
+
+<!-- OPTION B: Satellite crosshair, cyan accent -->
+<div class="option">
+  <h2>Option B — Satellite / Sci-Fi</h2>
+  <div class="logo-b">
+    <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- outer ring -->
+      <circle cx="32" cy="32" r="28" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <!-- inner ring -->
+      <circle cx="32" cy="32" r="16" stroke="#22d3ee" stroke-width="1.5"/>
+      <!-- crosshair lines -->
+      <line x1="32" y1="4" x2="32" y2="16" stroke="#22d3ee" stroke-width="2"/>
+      <line x1="32" y1="48" x2="32" y2="60" stroke="#22d3ee" stroke-width="2"/>
+      <line x1="4" y1="32" x2="16" y2="32" stroke="#22d3ee" stroke-width="2"/>
+      <line x1="48" y1="32" x2="60" y2="32" stroke="#22d3ee" stroke-width="2"/>
+      <!-- center dot -->
+      <circle cx="32" cy="32" r="4" fill="#22d3ee"/>
+    </svg>
+    <div class="wordmark">MAP<span>CODE</span></div>
+  </div>
+</div>
+
+<!-- OPTION C: Terminal / retro green -->
+<div class="option">
+  <h2>Option C — Retro Terminal</h2>
+  <div class="logo-c">
+    <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- terminal frame -->
+      <rect x="2" y="2" width="44" height="44" rx="6" stroke="#4ade80" stroke-width="2"/>
+      <!-- screen lines -->
+      <rect x="8" y="10" width="20" height="2" rx="1" fill="#4ade80" opacity="0.5"/>
+      <rect x="8" y="16" width="28" height="2" rx="1" fill="#4ade80" opacity="0.3"/>
+      <rect x="8" y="22" width="16" height="2" rx="1" fill="#4ade80" opacity="0.3"/>
+      <!-- cursor blink -->
+      <rect x="8" y="30" width="8" height="8" rx="1" fill="#4ade80"/>
+      <!-- > prompt -->
+      <path d="M22 30 L28 34 L22 38" stroke="#4ade80" stroke-width="2" stroke-linejoin="round" fill="none"/>
+    </svg>
+    <div class="wordmark"><span>map</span>code</div>
+  </div>
+</div>
+
+</body>
+</html>
