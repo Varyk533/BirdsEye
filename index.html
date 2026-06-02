@@ -1676,8 +1676,8 @@ function endRound() {
         const isCorrect = playerAnswer === correctAnswer.toLowerCase();
 
         if (isCorrect && player.guessCount) {
-          // Points: 5 for 1st guess, 4 for 2nd, 3 for 3rd, etc
-          points = Math.max(0, 6 - player.guessCount);
+          // Points: 10 for 1st guess, 8 for 2nd, 6 for 3rd, etc (diverse scoring for clear winner)
+          points = Math.max(0, 12 - 2 * player.guessCount);
         }
 
         // Update player's score and round points
