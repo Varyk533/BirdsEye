@@ -1112,8 +1112,18 @@ function showPartyMode() {
 function hidePartyMode() {
   // Clean up party map instance
   if (partyMapInstance) {
-    partyMapInstance.remove();
+    try {
+      partyMapInstance.remove();
+    } catch (e) {
+      console.warn('Error removing party map:', e);
+    }
     partyMapInstance = null;
+  }
+
+  const container = document.getElementById('party-map-preview');
+  if (container) {
+    container.style.display = 'flex';
+    container.innerHTML = '';
   }
 
   document.getElementById('party-container').style.display = 'none';
@@ -1361,10 +1371,22 @@ function findCountryCoordinates(countryName) {
 }
 
 function initializePartyMap() {
-  if (partyMapInstance) return partyMapInstance;
+  // Check if existing map instance is still valid
+  if (partyMapInstance && partyMapInstance._container) {
+    try {
+      partyMapInstance.invalidateSize(false);
+      return partyMapInstance;
+    } catch (e) {
+      console.warn('Existing map instance is broken, reinitializing:', e);
+      partyMapInstance = null;
+    }
+  }
 
   const container = document.getElementById('party-map-preview');
   if (!container) return null;
+
+  // Clear container to remove any orphaned Leaflet elements
+  container.innerHTML = '';
 
   try {
     partyMapInstance = L.map('party-map-preview', {
@@ -1384,10 +1406,17 @@ function initializePartyMap() {
       attribution: ''
     }).addTo(partyMapInstance);
 
-    partyMapInstance.invalidateSize();
+    // Ensure proper sizing
+    setTimeout(() => {
+      if (partyMapInstance && partyMapInstance._container) {
+        partyMapInstance.invalidateSize(false);
+      }
+    }, 50);
+
     return partyMapInstance;
   } catch (error) {
     console.error('Error initializing party map:', error);
+    partyMapInstance = null;
     return null;
   }
 }
@@ -1412,7 +1441,27 @@ function updatePartyMapZoom(guessCount) {
 function updatePartyMapView(countryName) {
   if (!countryName) return;
 
-  const map = initializePartyMap();
+  const container = document.getElementById('party-map-preview');
+  if (!container) return;
+
+  // Make sure container is visible
+  container.style.display = 'flex';
+
+  // Check if map exists and container has dimensions
+  let map = partyMapInstance;
+  if (!map || container.offsetHeight === 0) {
+    // Reinitialize if map doesn't exist or container is not visible
+    if (map) {
+      try {
+        map.remove();
+      } catch (e) {
+        console.warn('Error removing old map:', e);
+      }
+      partyMapInstance = null;
+    }
+    map = initializePartyMap();
+  }
+
   if (!map) return;
 
   const coords = findCountryCoordinates(countryName);
@@ -1432,7 +1481,9 @@ function updatePartyMapView(countryName) {
 
   // Ensure map size is correct after animation
   setTimeout(() => {
-    if (map) map.invalidateSize(false);
+    if (map && map._container) {
+      map.invalidateSize(false);
+    }
   }, 100);
 }
 
