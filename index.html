@@ -1609,11 +1609,15 @@ function updateScoreDisplay() {
 }
 
 function checkRoundComplete(players) {
+  // Prevent duplicate calls
+  if (partyState.roundEnding) return;
+
   const playerList = Object.values(players) || [];
   const allAnswered = playerList.every(p => p.answered);
   const totalPlayers = playerList.length;
 
   if (allAnswered && totalPlayers > 0) {
+    partyState.roundEnding = true;
     endRound();
   }
 }
@@ -1764,21 +1768,34 @@ function listenToResults() {
     html += '<div style="display: flex; flex-direction: column; gap: 8px;">';
 
     if (partyState.useScoring) {
-      // SCORING MODE - show points and scores
+      // Check if all players got it wrong to decide on zoom
+      const allWrong = Object.values(players).every(p => !p.isCorrect);
+
+      // SCORING MODE - show points, scores, and guesses
       Object.entries(players).forEach(([id, player]) => {
         const isSelf = id === partyState.playerId;
         const isCorrect = player.isCorrect;
         const pointsThisRound = player.pointsThisRound || 0;
         const totalScore = player.score || 0;
+        const playerGuess = player.answer || 'No answer';
         const statusColor = isCorrect ? '#22c55e' : '#dc2626';
         const statusText = isCorrect ? '✅ Correct' : '❌ Wrong';
         const mark = isSelf ? ' (You)' : '';
 
         html += `<div style="padding: 10px; background: #0f1f35; border-radius: 8px; border-left: 3px solid ${statusColor}; color: #cbd5e1;">
-          <div>${player.name}${mark} - ${statusText}</div>
+          <div>${player.name}${mark} - ${statusText} <span style="font-size: 0.8rem; color: #64748b;">(guessed: ${playerGuess})</span></div>
           <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 4px;">+${pointsThisRound} pts | Total: ${totalScore}</div>
         </div>`;
       });
+
+      // If all players got it wrong, zoom out for next round
+      if (allWrong) {
+        const maxGuessCount = Math.max(...Object.values(players).map(p => p.guessCount || 0));
+        // Wait for results to display, then zoom out progressively
+        setTimeout(() => {
+          updatePartyMapZoom(maxGuessCount);
+        }, 500);
+      }
     } else {
       // ELIMINATION MODE - show eliminated/safe status
       Object.entries(players).forEach(([id, player]) => {
@@ -1867,6 +1884,10 @@ function startNextRound() {
           updates[`players/${id}/pointsThisRound`] = 0;
         }
       });
+
+      // Reset round ending flag and local guess count
+      partyState.roundEnding = false;
+      partyState.guessCount = {};
 
       partyState.roomRef.update(updates).then(() => {
         showPartyScreen('party-question');
