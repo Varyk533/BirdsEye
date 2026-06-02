@@ -1570,6 +1570,7 @@ function listenToQuestion() {
     if (!snapshot) return;
     const players = snapshot.val() || {};
     updateScoreDisplay(); // Update scores if in scoring mode
+    ensureInputEnabled(players); // Make sure input stays enabled if needed
     checkRoundComplete(players);
   });
 
@@ -1642,6 +1643,23 @@ function updateScoreDisplay() {
   });
 }
 
+function ensureInputEnabled(players) {
+  // Make sure input is enabled if no one has answered yet (handles sync issues)
+  const playerList = Object.values(players) || [];
+  const anyAnswered = playerList.some(p => p.answered);
+
+  if (!anyAnswered) {
+    const inputEl = document.getElementById('party-answer-input');
+    const submitBtn = document.getElementById('party-submit-answer-btn');
+    if (inputEl && inputEl.disabled) {
+      inputEl.disabled = false;
+    }
+    if (submitBtn && submitBtn.disabled) {
+      submitBtn.disabled = false;
+    }
+  }
+}
+
 function checkRoundComplete(players) {
   // Prevent duplicate calls
   if (partyState.roundEnding) return;
@@ -1685,11 +1703,22 @@ function checkRoundComplete(players) {
           updates[`players/${id}/answer`] = null;
         });
 
-        // Reset local UI for retry
-        document.getElementById('party-answer-input').value = '';
-        document.getElementById('party-answer-input').disabled = false;
-        document.getElementById('party-submit-answer-btn').disabled = false;
-        document.getElementById('party-answer-status').style.display = 'none';
+        // Reset local UI for retry with error handling
+        try {
+          const inputEl = document.getElementById('party-answer-input');
+          const submitBtn = document.getElementById('party-submit-answer-btn');
+          const statusEl = document.getElementById('party-answer-status');
+
+          if (inputEl) {
+            inputEl.value = '';
+            inputEl.disabled = false;
+            inputEl.focus(); // Focus for better UX
+          }
+          if (submitBtn) submitBtn.disabled = false;
+          if (statusEl) statusEl.style.display = 'none';
+        } catch (e) {
+          console.warn('Error resetting UI:', e);
+        }
 
         roomRef.update(updates).catch(e => console.error('Error resetting for retry:', e));
       }
