@@ -1647,6 +1647,12 @@ function checkRoundComplete(players) {
           updates[`players/${id}/answer`] = null;
         });
 
+        // Reset local UI for retry
+        document.getElementById('party-answer-input').value = '';
+        document.getElementById('party-answer-input').disabled = false;
+        document.getElementById('party-submit-answer-btn').disabled = false;
+        document.getElementById('party-answer-status').style.display = 'none';
+
         roomRef.update(updates).catch(e => console.error('Error resetting for retry:', e));
       }
     });
