@@ -1489,11 +1489,12 @@ function listenToQuestion() {
     partyState.roomRef.child('players').off();
   }
 
-  // Reset answer form
+  // Reset answer form and round state
   document.getElementById('party-answer-input').value = '';
   document.getElementById('party-answer-input').disabled = false;
   document.getElementById('party-submit-answer-btn').disabled = false;
   document.getElementById('party-answer-status').style.display = 'none';
+  partyState.roundEnding = false;
 
   // Fetch useScoring flag from Firebase (for players to know if they're in scoring mode)
   partyState.roomRef.once('value', snapshot => {
@@ -1617,8 +1618,36 @@ function checkRoundComplete(players) {
   const totalPlayers = playerList.length;
 
   if (allAnswered && totalPlayers > 0) {
-    partyState.roundEnding = true;
-    endRound();
+    // Check if anyone got it correct
+    const roomRef = partyState.roomRef;
+    roomRef.once('value', snapshot => {
+      const roomData = snapshot.val();
+      const currentQ = roomData.currentQuestion || {};
+      const correctAnswer = (currentQ.country || '').toLowerCase();
+      const anyCorrect = Object.values(players).some(p =>
+        (p.answer || '').toLowerCase() === correctAnswer
+      );
+
+      if (anyCorrect) {
+        // Someone got it right - end the round
+        partyState.roundEnding = true;
+        endRound();
+      } else {
+        // Everyone got it wrong - zoom out and try again with same country
+        const maxGuessCount = Math.max(...Object.values(players).map(p => p.guessCount || 0));
+        updatePartyMapZoom(maxGuessCount);
+
+        // Reset all players for another attempt at same question
+        const updates = {};
+        Object.keys(players).forEach(id => {
+          updates[`players/${id}/answered`] = false;
+          updates[`players/${id}/answer`] = null;
+          // Keep guessCount incrementing
+        });
+
+        roomRef.update(updates).catch(e => console.error('Error resetting for retry:', e));
+      }
+    });
   }
 }
 
@@ -1741,24 +1770,13 @@ function listenToResults() {
     if (mapShade) {
       mapShade.classList.remove('up');
       mapShade.classList.add('down');
-    }
-
-    // For <4 players (scoring mode), update zoom based on highest guess count
-    if (partyState.useScoring) {
-      let maxGuessCount = 0;
-      Object.values(players).forEach(player => {
-        const guesses = player.guessCount || 0;
-        if (guesses > maxGuessCount) maxGuessCount = guesses;
-      });
-      // Zoom in based on guess count (1.4s animation + 0.5s buffer = 1.9s before hiding shade)
-      updatePartyMapZoom(maxGuessCount);
-      // Hide shade after zoom animation completes + 0.5s buffer
+      // Hide shade after a moment
       setTimeout(() => {
         if (mapShade) {
           mapShade.classList.remove('down');
           mapShade.classList.add('up');
         }
-      }, 1900);
+      }, 2000);
     }
 
     const content = document.getElementById('party-result-content');
@@ -1768,9 +1786,6 @@ function listenToResults() {
     html += '<div style="display: flex; flex-direction: column; gap: 8px;">';
 
     if (partyState.useScoring) {
-      // Check if all players got it wrong to decide on zoom
-      const allWrong = Object.values(players).every(p => !p.isCorrect);
-
       // SCORING MODE - show points, scores, and guesses
       Object.entries(players).forEach(([id, player]) => {
         const isSelf = id === partyState.playerId;
@@ -1787,15 +1802,6 @@ function listenToResults() {
           <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 4px;">+${pointsThisRound} pts | Total: ${totalScore}</div>
         </div>`;
       });
-
-      // If all players got it wrong, zoom out for next round
-      if (allWrong) {
-        const maxGuessCount = Math.max(...Object.values(players).map(p => p.guessCount || 0));
-        // Wait for results to display, then zoom out progressively
-        setTimeout(() => {
-          updatePartyMapZoom(maxGuessCount);
-        }, 500);
-      }
     } else {
       // ELIMINATION MODE - show eliminated/safe status
       Object.entries(players).forEach(([id, player]) => {
